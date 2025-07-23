@@ -42,26 +42,25 @@ segment : %empty
 text : text NEWLINE instruction
 | instruction
 ;
-instruction : r-type
-            | i-type
-            | ui-type
-            | s-type
-            | b-type
-            | j-type
-{
-  print_instruction(instruction);
-}
+
+instruction : r-type { print_instruction(instruction); }
+            | i-type { print_instruction(instruction); }
+            | ui-type { print_instruction(instruction); }
+            | s-type { print_instruction(instruction); }
+            | b-type { print_instruction(instruction); }
+            | j-type { print_instruction(instruction); }
 ;
-r-type : add
-       | sub
+
+r-type 
+  : add
+  | sub
+;
+
+add: ADD REGISTER COMMA REGISTER COMMA REGISTER
 {
   instruction.format = IF_R;
   instruction.opcode = 0b0110011;
   instruction.funct3 = 0;
-}
-;
-add: ADD REGISTER COMMA REGISTER COMMA REGISTER
-{
   instruction.funct7 = 0;
   instruction.rd = $2;
   instruction.rs1 = $4;
@@ -70,21 +69,25 @@ add: ADD REGISTER COMMA REGISTER COMMA REGISTER
 ;
 sub: SUB REGISTER COMMA REGISTER COMMA REGISTER
 {
+  instruction.format = IF_R;
+  instruction.opcode = 0b0110011;
+  instruction.funct3 = 0;
   instruction.funct7 = 0b0100000;
   instruction.rd = $2;
   instruction.rs1 = $4;
   instruction.rs2 = $6;
 }
 ;
-i-type : addi
-       | slli
-       | lw
+
+i-type 
+  : addi
+  | slli
+  | lw
+;
+
+addi: ADDI REGISTER COMMA REGISTER COMMA imm
 {
   instruction.format = IF_I;
-}
-;
-addi: ADDI REGISTER COMMA REGISTER COMMA IMMEDIATE
-{
   instruction.funct3 = 0;
   instruction.opcode = 0b0010011;
   instruction.rd = $2;
@@ -92,8 +95,9 @@ addi: ADDI REGISTER COMMA REGISTER COMMA IMMEDIATE
   instruction.imm = $6;
 }
 ;
-slli: SLLI REGISTER COMMA REGISTER COMMA IMMEDIATE
+slli: SLLI REGISTER COMMA REGISTER COMMA imm
 {
+  instruction.format = IF_I;
   instruction.funct3 = 0b001;
   instruction.funct7 = 0;
   instruction.opcode = 0b0010011;
@@ -102,8 +106,9 @@ slli: SLLI REGISTER COMMA REGISTER COMMA IMMEDIATE
   instruction.imm = $6;
 }
 ;
-lw: LW REGISTER COMMA IMMEDIATE LEFT_PAREN REGISTER RIGHT_PAREN
+lw: LW REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
+  instruction.format = IF_I;
   instruction.funct3 = 0b010;
   instruction.opcode = 0b0000011;
   instruction.rd = $2;
@@ -111,13 +116,14 @@ lw: LW REGISTER COMMA IMMEDIATE LEFT_PAREN REGISTER RIGHT_PAREN
   instruction.rs1 = $6;
 }
 ;
-s-type : sw
+
+s-type 
+  : sw
+;
+
+sw: SW REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
   instruction.format = IF_S;
-}
-;
-sw: SW REGISTER COMMA IMMEDIATE LEFT_PAREN REGISTER RIGHT_PAREN
-{
   instruction.opcode = 0b0100011;
   instruction.funct3 = 0b010;
   instruction.rs2 = $2;
@@ -125,13 +131,14 @@ sw: SW REGISTER COMMA IMMEDIATE LEFT_PAREN REGISTER RIGHT_PAREN
   instruction.rs1 = $6;
 }
 ;
-b-type : beq
+
+b-type 
+  : beq
+;
+
+beq: BEQ REGISTER COMMA REGISTER COMMA imm
 {
   instruction.format = IF_B;
-}
-;
-beq: BEQ REGISTER COMMA REGISTER COMMA IMMEDIATE
-{
   instruction.opcode = 0b1100011;
   instruction.funct3 = 0;
   instruction.rs1 = $2;
@@ -139,29 +146,32 @@ beq: BEQ REGISTER COMMA REGISTER COMMA IMMEDIATE
   instruction.imm = $6;
 }
 ;
-j-type : j
+
+j-type 
+  : j
+;
+
+j: J imm
 {
   instruction.format = IF_J;
-}
-;
-j: J IMMEDIATE
-{
   instruction.opcode = 0b1101111;
   instruction.rd = 0;
   instruction.imm = $2;
 }
-ui-type : auipc
+
+ui-type 
+  : auipc
+;
+
+auipc: AUIPC REGISTER COMMA imm
 {
   instruction.format = IF_UI;
-}
-;
-auipc: AUIPC REGISTER COMMA IMMEDIATE
-{
   instruction.opcode = 0b0010111;
   instruction.rd = $2;
   instruction.imm = $4;
 }
 ;
+
 imm : MINUS IMMEDIATE
 {
 $$ = -1 * $2;
@@ -241,7 +251,8 @@ static int bit_range(int val, char begin, char end) {
 }
 
 void yyerror(char *msg){
-    // If your assembler cannot parse input it will exit, make sure to test locally using the tests on canvas
+    fprintf(stderr, "Parse error: %s\n", msg);
+    exit(1);
 }
 
 int main(){
