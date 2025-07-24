@@ -27,7 +27,12 @@ void yyerror(char* s);
   long l;
 }
 %token <l> REGISTER NEWLINE COMMA LEFT_PAREN RIGHT_PAREN MINUS IMMEDIATE
-%token ADD SUB ADDI SLLI LW SW BEQ J AUIPC
+%token ADD SUB SLL SLT SLTU XOR SRL SRA OR AND
+%token ADDI SLLI LW SLTI SLTIU XORI ORI ANDI SRLI SRAI JALR LB LH LBU LHU RET LI MV NOP SUBI
+%token SW SH SB
+%token BEQ BNE BLT BGE BLTU BGEU
+%token J JAL
+%token AUIPC LUI ADDR
 %type <l> imm
 
 %%
@@ -43,12 +48,13 @@ text : text NEWLINE instruction
 | instruction
 ;
 
-instruction : r-type { print_instruction(instruction); }
-            | i-type { print_instruction(instruction); }
-            | ui-type { print_instruction(instruction); }
-            | s-type { print_instruction(instruction); }
-            | b-type { print_instruction(instruction); }
-            | j-type { print_instruction(instruction); }
+instruction 
+  : r-type { print_instruction(instruction); }
+  | i-type { print_instruction(instruction); }
+  | ui-type { print_instruction(instruction); }
+  | s-type { print_instruction(instruction); }
+  | b-type { print_instruction(instruction); }
+  | j-type { print_instruction(instruction); }
 ;
 
 r-type 
@@ -62,6 +68,17 @@ add: ADD REGISTER COMMA REGISTER COMMA REGISTER
   instruction.opcode = 0b0110011;
   instruction.funct3 = 0;
   instruction.funct7 = 0;
+  instruction.rd = $2;
+  instruction.rs1 = $4;
+  instruction.rs2 = $6;
+}
+;
+sub: SUB REGISTER COMMA REGISTER COMMA REGISTER
+{
+  instruction.format = IF_R;
+  instruction.opcode = 0b0110011;
+  instruction.funct3 = 0;
+  instruction.funct7 = 0b0100000;
   instruction.rd = $2;
   instruction.rs1 = $4;
   instruction.rs2 = $6;
