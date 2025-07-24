@@ -2,6 +2,7 @@
 
 %{
 #include "assembler.tab.h"
+#include <string.h>
 extern YYSTYPE yylval;
 %}
 
@@ -16,6 +17,8 @@ SRL                 return SRL;
 SRA                 return SRA;
 OR                  return OR;
 AND                 return AND;
+NEG                 return NEG;
+SNEZ                return SNEZ;
 
 ADDI                return ADDI;
 SLLI                return SLLI;
@@ -37,6 +40,8 @@ LI                  return LI;
 MV                  return MV;
 NOP                 return NOP;
 SUBI                return SUBI;
+JR                  return JR;
+SEQZ                return SEQZ;
 
 SW                  return SW;
 SH                  return SH;
@@ -48,6 +53,8 @@ BLT                 return BLT;
 BGE                 return BGE;
 BLTU                return BLTU;
 BGEU                return BGEU;
+BEQZ                return BEQZ;
+BNEZ                return BNEZ;
 
 J                   return J;
 JAL                 return JAL;
@@ -55,6 +62,12 @@ JAL                 return JAL;
 AUIPC               return AUIPC;
 LUI                 return LUI;
 ADDR                return ADDR;
+LA                  return LA;
+
+[a-zA-Z_][a-zA-Z0-9_]*  { 
+                            yylval.s = strdup(yytext); 
+                            return IDENTIFIER;
+}
 0x[0-9a-fA-F]+      yylval.l = strtol(yytext, NULL, 16); return IMMEDIATE;
 x[0-9]+             yylval.l = strtol(yytext + 1, NULL, 10); return REGISTER;
 0b[0-1]+            yylval.l = strtol(yytext, NULL, 2); return IMMEDIATE;
