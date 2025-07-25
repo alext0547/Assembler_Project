@@ -61,16 +61,14 @@ int find_symbol(const char *name);
 %%
 program : segments
 ;
-segments : %empty
+segments : /* empty */
 | segments segment
 ;
-segment : text_line NEWLINE
-| text_line
+segment : label_list instruction NEWLINE
+| instruction NEWLINE
+| label_list NEWLINE
 ;
-text_line : label_list instruction
-| label_list
-;
-label_list : %empty
+label_list : /* empty */
 | label_list label
 ;
 label : IDENTIFIER ':' {
@@ -296,7 +294,7 @@ subi: SUBI REGISTER COMMA REGISTER COMMA imm
   instruction.opcode = 0b0010011;
   instruction.rd = $2;
   instruction.rs1 = $4;
-  instruction.imm = -$6;
+  instruction.imm = -($6);
 }
 ;
 slli: SLLI REGISTER COMMA REGISTER COMMA imm
@@ -392,7 +390,7 @@ srai: SRAI REGISTER COMMA REGISTER COMMA imm
   instruction.imm = $6;
 }
 ;
-jalr: LW REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
+jalr: JALR REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
   set_format_i();
   instruction.funct3 = 0;
@@ -462,7 +460,7 @@ lbu: LBU REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
   instruction.rs1 = $6;
 }
 ;
-lhu: lhu REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
+lhu: LHU REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
   set_format_i();
   instruction.funct3 = 0b101;
