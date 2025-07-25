@@ -64,12 +64,13 @@ program : segments
 segments : /* empty */
 | segments segment
 ;
-segment : label_list instruction NEWLINE
-| instruction NEWLINE
-| label_list NEWLINE
+segment : label_list opt_instruction NEWLINE
 ;
 label_list : /* empty */
 | label_list label
+;
+opt_instruction : /* empty */
+| instruction { print_instruction(instruction); }
 ;
 label : IDENTIFIER ':' {
   insert_symbol($1, pc);
@@ -78,12 +79,12 @@ label : IDENTIFIER ':' {
 ;
 
 instruction 
-  : r-type { print_instruction(instruction); }
-  | i-type { print_instruction(instruction); }
-  | ui-type { print_instruction(instruction); }
-  | s-type { print_instruction(instruction); }
-  | b-type { print_instruction(instruction); }
-  | j-type { print_instruction(instruction); }
+  : r-type
+  | i-type
+  | ui-type
+  | s-type
+  | b-type
+  | j-type
 ;
 
 r-type 
@@ -716,8 +717,8 @@ static void print_instruction(struct instruction instruction) {
   printf("\n");
   pc += 4;
 }
-static void printbin(int val, char bits) {
-  for (char i = bits - 1; i >= 0; i--) {
+static void printbin(int val, int bits) {
+  for (int i = bits - 1; i >= 0; i--) {
     if (val & (1 << i)) {
       putchar('1');
     } else {
@@ -726,14 +727,22 @@ static void printbin(int val, char bits) {
   }
 }
 
-static int bit_range(int val, char begin, char end) {
-  int mask = ((1 << end) - 1) ^ ((1 << begin) - 1);
+static int bit_range(int val, int begin, int end) {
+  unsigned int mask;
+  
+  if (end == 32) {
+    mask = 0xFFFFFFFF;
+  }
+  else {
+    mask = (1U << end) - 1;
+  }
+  
+  mask ^= (1u << begin) - 1;
   return (val & mask) >> begin;
 }
 
 void yyerror(char *msg){
-    fprintf(stderr, "Parse error: %s\n", msg);
-    exit(1);
+
 }
 
 void set_format_r(){ instruction.format = IF_R; instruction.opcode = 0b0110011; }
