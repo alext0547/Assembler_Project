@@ -2,16 +2,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "symtab.h"
 
 enum instruction_format { IF_R, IF_I, IF_UI, IF_S, IF_B, IF_J };
 
 int pc = 0;
-
-typedef struct sym {
-  char *name;
-  int addr;
-  struct sym *next;
-} sym_t;
 
 sym_t *sym_tab = NULL;
 
@@ -39,8 +34,6 @@ void set_format_ui();
 void set_format_j();
 int label_high(char* label);
 int label_low(char* label);
-void insert_symbol(const char *name, int addr);
-int find_symbol(const char *name);
 %}
 
 %start program
@@ -73,7 +66,7 @@ opt_instruction : /* empty */
 | instruction { print_instruction(instruction); }
 ;
 label : IDENTIFIER ':' {
-  insert_symbol($1, pc);
+  insert_sym($1, pc);
   free($1);
 }
 ;
@@ -753,41 +746,15 @@ void set_format_ui(){ instruction.format = IF_UI; }
 void set_format_j(){ instruction.format = IF_J; instruction.opcode = 0b1101111; }
 
 int label_high(char* label){
-  int target = find_symbol(label);
+  int target = search_sym(label);
   int offset = target - pc;
   return (offset + 0x800) >> 12;
 }
 
 int label_low(char* label){
-  int target = find_symbol(label);
+  int target = search_sym(label);
   int offset = target - pc;
   return offset & 0xFFF;
-}
-
-void insert_symbol(const char *name, int addr){
-  for (sym_t *p = sym_tab; p; p = p->next){
-    if (strcmp(p->name, name) == 0){
-      fprintf(stderr, "Error: duplicate label %s at 0x%08x\n", name, addr);
-      exit(1);
-    }
-  }
-
-  sym_t *n = malloc(sizeof *n);
-  n -> name = strdup(name);
-  n -> addr = addr;
-  n -> next = sym_tab;
-  sym_tab = n;
-}
-
-int find_symbol(const char *name){
-  for (sym_t *p = sym_tab; p; p = p->next){
-    if (strcmp(p->name, name) == 0){
-      return p->addr;
-    }
-  }
-
-  fprintf(stderr, "Error: undefined label '%s'\n", name);
-  exit(1);
 }
 
 int main(){
