@@ -1,3 +1,6 @@
+// Symbol table interface using separate chaining for collision resolution.
+// Provides functions for creating, inserting, searching, deleting, and freeing symbols.
+
 #ifndef SYMBOL_TABLE_H
 #define SYMBOL_TABLE_H
 
