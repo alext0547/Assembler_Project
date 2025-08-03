@@ -19,7 +19,6 @@ typedef struct sym{
 } sym_t;
 
 sym_t* create_symtab();
-int hash(const char* key, int table_size);
 bool insert_sym(sym_t* symtab, const char* key, int value);
 int search_sym(sym_t* symtab, const char* key);
 bool remove_sym(sym_t* symtab, const char* key);
