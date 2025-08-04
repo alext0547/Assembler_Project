@@ -1,46 +1,26 @@
+%option yylineno
+
 %{
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "symtab.h"
+#include "pass.h"
+#include "ir.h"
 
-enum instruction_format { IF_R, IF_I, IF_UI, IF_S, IF_B, IF_J };
-
-int pc = 0;
-
-sym_t *sym_tab = NULL;
-
-static struct instruction {
-  enum instruction_format format;
-  int funct3 : 3;
-  int funct7 : 7;
-  int imm : 20;
-  int opcode : 7;
-  int rd : 5;
-  int rs1 : 5;
-  int rs2 : 5;
-} instruction;
-
-static void printbin(int val, char bits);
-static int bit_range(int val, char begin, char end);
-static void print_instruction(struct instruction);
-int yylex();
+int yylex(void);
 void yyerror(char* s);
-void set_format_r();
-void set_format_i();
-void set_format_s();
-void set_format_b();
-void set_format_ui();
-void set_format_j();
-int label_high(char* label);
-int label_low(char* label);
+extern sym_t *symtab;
+extern int yylineno;
 %}
 
 %start program
+
 %union {
   long l;
-  char *s;
+  char* s;
 }
+
 %token <s> IDENTIFIER
 %token <l> REGISTER NEWLINE COMMA LEFT_PAREN RIGHT_PAREN MINUS IMMEDIATE
 %token ADD SUB SLL SLT SLTU XOR SRL SRA OR AND NEG SNEZ
@@ -48,8 +28,10 @@ int label_low(char* label);
 %token SW SH SB
 %token BEQ BNE BLT BGE BLTU BGEU BEQZ BNEZ
 %token J JAL
-%token AUIPC LUI ADDR LA
+%token AUIPC LUI LA
+%token DOT_TEXT DOT_DATA ALIGN
 %type <l> imm
+%type <l> align_pow2
 
 %%
 program : segments
@@ -57,17 +39,30 @@ program : segments
 segments : /* empty */
 | segments segment
 ;
-segment : label_list opt_instruction NEWLINE
+segment : label_list opt_item NEWLINE
 ;
 label_list : /* empty */
 | label_list label
 ;
-opt_instruction : /* empty */
-| instruction { print_instruction(instruction); }
+opt_item : /* empty */
+| instruction
+| directive
 ;
 label : IDENTIFIER ':' {
-  insert_sym($1, pc);
+  if (!insert_sym(symtab, $1, (int)pass_current_pc())) {
+    /* Duplicate label error reported by insert_sym */
+  }
   free($1);
+}
+;
+directive : DOT_TEXT { pass_set_section(SEC_TEXT);}
+| DOT_DATA { pass_set_section(SEC_DATA);}
+| ALIGN align_pow2 {
+  uint32_t addr_before = pass_current_pc();
+  uint32_t pad = pass_align_current_pc((uint32_t)$2);
+  if (pad > 0) {
+    ir_append_align(cur_section, addr_before, pad, yylineno);
+  }
 }
 ;
 
@@ -97,122 +92,98 @@ r-type
 
 add: ADD REGISTER COMMA REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0;
-  instruction.funct7 = 0;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.rs2 = $6;
+  ir_append_instr(OP_ADD, IF_R, $2, $4, $6, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 sub: SUB REGISTER COMMA REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0;
-  instruction.funct7 = 0b0100000;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.rs2 = $6;
+  ir_append_instr(OP_SUB, IF_R, $2, $4, $6, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 neg: NEG REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0;
-  instruction.funct7 = 0b0100000;
-  instruction.rd = $2;
-  instruction.rs1 = 0;
-  instruction.rs2 = $4;
+  ir_append_instr(OP_SUB, IF_R, $2, 0, $4, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 sll: SLL REGISTER COMMA REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0b001;
-  instruction.funct7 = 0;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.rs2 = $6;
+  ir_append_instr(OP_SLL, IF_R, $2, $4, $6, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 slt: SLT REGISTER COMMA REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0b010;
-  instruction.funct7 = 0;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.rs2 = $6;
+  ir_append_instr(OP_SLT, IF_R, $2, $4, $6, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 sltu: SLTU REGISTER COMMA REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0b011;
-  instruction.funct7 = 0;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.rs2 = $6;
+  ir_append_instr(OP_SLTU, IF_R, $2, $4, $6, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 snez: SNEZ REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0b011;
-  instruction.funct7 = 0;
-  instruction.rd = $2;
-  instruction.rs1 = 0;
-  instruction.rs2 = $4;
+  ir_append_instr(OP_SLTU, IF_R, $2, 0, $4, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 xor: XOR REGISTER COMMA REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0b100;
-  instruction.funct7 = 0;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.rs2 = $6;
+  ir_append_instr(OP_XOR, IF_R, $2, $4, $6, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 srl: SRL REGISTER COMMA REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0b101;
-  instruction.funct7 = 0;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.rs2 = $6;
+  ir_append_instr(OP_SRL, IF_R, $2, $4, $6, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 sra: SRA REGISTER COMMA REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0b101;
-  instruction.funct7 = 0b0100000;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.rs2 = $6;
+  ir_append_instr(OP_SRA, IF_R, $2, $4, $6, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 or: OR REGISTER COMMA REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0b110;
-  instruction.funct7 = 0;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.rs2 = $6;
+  ir_append_instr(OP_OR, IF_R, $2, $4, $6, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 and: AND REGISTER COMMA REGISTER COMMA REGISTER
 {
-  set_format_r();
-  instruction.funct3 = 0b111;
-  instruction.funct7 = 0;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.rs2 = $6;
+  ir_append_instr(OP_AND, IF_R, $2, $4, $6, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 
@@ -243,225 +214,178 @@ i-type
 
 addi: ADDI REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_i();
-  instruction.funct3 = 0;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_ADDI, IF_I, $2, $4, -1, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 nop: NOP
 {
-  set_format_i();
-  instruction.funct3 = 0;
-  instruction.opcode = 0b0010011;
-  instruction.rd = 0;
-  instruction.rs1 = 0;
-  instruction.imm = 0;
+  ir_append_instr(OP_ADDI, IF_I, 0, 0, -1, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 mv: MV REGISTER COMMA REGISTER
 {
-  set_format_i();
-  instruction.funct3 = 0;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = 0;
+  ir_append_instr(OP_ADDI, IF_I, $2, $4, -1, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 li: LI REGISTER COMMA imm
 {
-  set_format_i();
-  instruction.funct3 = 0;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = 0;
-  instruction.imm = $4;
+  ir_append_instr(OP_ADDI, IF_I, $2, 0, -1, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 subi: SUBI REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_i();
-  instruction.funct3 = 0;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = -($6);
+  ir_append_instr(OP_ADDI, IF_I, $2, $4, -1, -($6), 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 slli: SLLI REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_i();
-  instruction.funct3 = 0b001;
-  instruction.funct7 = 0;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_SLLI, IF_I, $2, $4, -1, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 slti: SLTI REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_i();
-  instruction.funct3 = 0b010;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_SLTI, IF_I, $2, $4, -1, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 sltiu: SLTIU REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_i();
-  instruction.funct3 = 0b011;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_SLTIU, IF_I, $2, $4, -1, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 seqz: SEQZ REGISTER COMMA REGISTER
 {
-  set_format_i();
-  instruction.funct3 = 0b011;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = 1;
+  ir_append_instr(OP_SLTIU, IF_I, $2, $4, -1, 1, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 xori: XORI REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_i();
-  instruction.funct3 = 0b100;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_XORI, IF_I, $2, $4, -1, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 ori: ORI REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_i();
-  instruction.funct3 = 0b110;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_ORI, IF_I, $2, $4, -1, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 andi: ANDI REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_i();
-  instruction.funct3 = 0b111;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_ANDI, IF_I, $2, $4, -1, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 srli: SRLI REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_i();
-  instruction.funct3 = 0b101;
-  instruction.funct7 = 0;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_SRLI, IF_I, $2, $4, -1, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 srai: SRAI REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_i();
-  instruction.funct3 = 0b101;
-  instruction.funct7 = 0b0100000;
-  instruction.opcode = 0b0010011;
-  instruction.rd = $2;
-  instruction.rs1 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_SRAI, IF_I, $2, $4, -1, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 jalr: JALR REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
-  set_format_i();
-  instruction.funct3 = 0;
-  instruction.opcode = 0b1100111;
-  instruction.rd = $2;
-  instruction.imm = $4;
-  instruction.rs1 = $6;
+  ir_append_instr(OP_JALR, IF_I, $2, $6, -1, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 jr: JR REGISTER
 {
-  set_format_i();
-  instruction.funct3 = 0;
-  instruction.opcode = 0b1100111;
-  instruction.rd = 0;
-  instruction.rs1 = $2;
-  instruction.imm = 0;
+  ir_append_instr(OP_JALR, IF_I, 0, $2, -1, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 ret: RET
 {
-  set_format_i();
-  instruction.funct3 = 0;
-  instruction.opcode = 0b1100111;
-  instruction.rd = 0;
-  instruction.imm = 0;
-  instruction.rs1 = 1;
+  ir_append_instr(OP_JALR, IF_I, 0, 1, -1, 0, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 lw: LW REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
-  set_format_i();
-  instruction.funct3 = 0b010;
-  instruction.opcode = 0b0000011;
-  instruction.rd = $2;
-  instruction.imm = $4;
-  instruction.rs1 = $6;
+  ir_append_instr(OP_LW, IF_I, $2, $6, -1, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 lb: LB REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
-  set_format_i();
-  instruction.funct3 = 0;
-  instruction.opcode = 0b0000011;
-  instruction.rd = $2;
-  instruction.imm = $4;
-  instruction.rs1 = $6;
+  ir_append_instr(OP_LB, IF_I, $2, $6, -1, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 lh: LH REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
-  set_format_i();
-  instruction.funct3 = 0b001;
-  instruction.opcode = 0b0000011;
-  instruction.rd = $2;
-  instruction.imm = $4;
-  instruction.rs1 = $6;
+  ir_append_instr(OP_LH, IF_I, $2, $6, -1, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 lbu: LBU REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
-  set_format_i();
-  instruction.funct3 = 0b100;
-  instruction.opcode = 0b0000011;
-  instruction.rd = $2;
-  instruction.imm = $4;
-  instruction.rs1 = $6;
+  ir_append_instr(OP_LBU, IF_I, $2, $6, -1, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 lhu: LHU REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
-  set_format_i();
-  instruction.funct3 = 0b101;
-  instruction.opcode = 0b0000011;
-  instruction.rd = $2;
-  instruction.imm = $4;
-  instruction.rs1 = $6;
+  ir_append_instr(OP_LHU, IF_I, $2, $6, -1, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 
@@ -473,29 +397,26 @@ s-type
 
 sw: SW REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
-  set_format_s();
-  instruction.funct3 = 0b010;
-  instruction.rs2 = $2;
-  instruction.imm = $4;
-  instruction.rs1 = $6;
+  ir_append_instr(OP_SW, IF_S, -1, $6, $2, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 sb: SB REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
-  set_format_s();
-  instruction.funct3 = 0;
-  instruction.rs2 = $2;
-  instruction.imm = $4;
-  instruction.rs1 = $6;
+  ir_append_instr(OP_SB, IF_S, -1, $6, $2, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 sh: SH REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
-  set_format_s();
-  instruction.funct3 = 0b001;
-  instruction.rs2 = $2;
-  instruction.imm = $4;
-  instruction.rs1 = $6;
+  ir_append_instr(OP_SH, IF_S, -1, $6, $2, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 
@@ -512,74 +433,138 @@ b-type
 
 beq: BEQ REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_b();
-  instruction.funct3 = 0;
-  instruction.rs1 = $2;
-  instruction.rs2 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_BEQ, IF_B, -1, $2, $4, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+}
+;
+beq: BEQ REGISTER COMMA REGISTER COMMA IDENTIFIER
+{
+  ir_append_instr(OP_BEQ, IF_B, -1, $2, $4, 0, 
+                  $6, RELOC_BOFF, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+  free($6);
 }
 ;
 beqz: BEQZ REGISTER COMMA imm
 {
-  set_format_b();
-  instruction.funct3 = 0;
-  instruction.rs1 = $2;
-  instruction.rs2 = 0;
-  instruction.imm = $4;
+  ir_append_instr(OP_BEQ, IF_B, -1, $2, 0, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+}
+;
+beqz: BEQZ REGISTER COMMA IDENTIFIER
+{
+  ir_append_instr(OP_BEQ, IF_B, -1, $2, 0, 0, 
+                  $4, RELOC_BOFF, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+  free($4);
 }
 ;
 bne: BNE REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_b();
-  instruction.funct3 = 0b001;
-  instruction.rs1 = $2;
-  instruction.rs2 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_BNE, IF_B, -1, $2, $4, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+}
+;
+bne: BNE REGISTER COMMA REGISTER COMMA IDENTIFIER
+{
+  ir_append_instr(OP_BNE, IF_B, -1, $2, $4, 0, 
+                  $6, RELOC_BOFF, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+  free($6);
 }
 ;
 bnez: BNEZ REGISTER COMMA imm
 {
-  set_format_b();
-  instruction.funct3 = 0b001;
-  instruction.rs1 = $2;
-  instruction.rs2 = 0;
-  instruction.imm = $4;
+  ir_append_instr(OP_BNE, IF_B, -1, $2, 0, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+}
+;
+bnez: BNEZ REGISTER COMMA IDENTIFIER
+{
+  ir_append_instr(OP_BNE, IF_B, -1, $2, 0, 0, 
+                  $4, RELOC_BOFF, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+  free($4);
 }
 ;
 blt: BLT REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_b();
-  instruction.funct3 = 0b100;
-  instruction.rs1 = $2;
-  instruction.rs2 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_BLT, IF_B, -1, $2, $4, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+}
+;
+blt: BLT REGISTER COMMA REGISTER COMMA IDENTIFIER
+{
+  ir_append_instr(OP_BLT, IF_B, -1, $2, $4, 0, 
+                  $6, RELOC_BOFF, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+  free($6);
 }
 ;
 bge: BGE REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_b();
-  instruction.funct3 = 0b101;
-  instruction.rs1 = $2;
-  instruction.rs2 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_BGE, IF_B, -1, $2, $4, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+}
+;
+bge: BGE REGISTER COMMA REGISTER COMMA IDENTIFIER
+{
+  ir_append_instr(OP_BGE, IF_B, -1, $2, $4, 0, 
+                  $6, RELOC_BOFF, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+  free($6);
 }
 ;
 bltu: BLTU REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_b();
-  instruction.funct3 = 0b110;
-  instruction.rs1 = $2;
-  instruction.rs2 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_BLTU, IF_B, -1, $2, $4, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+}
+;
+bltu: BLTU REGISTER COMMA REGISTER COMMA IDENTIFIER
+{
+  ir_append_instr(OP_BLTU, IF_B, -1, $2, $4, 0, 
+                  $6, RELOC_BOFF, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+  free($6);
 }
 ;
 bgeu: BGEU REGISTER COMMA REGISTER COMMA imm
 {
-  set_format_b();
-  instruction.funct3 = 0b111;
-  instruction.rs1 = $2;
-  instruction.rs2 = $4;
-  instruction.imm = $6;
+  ir_append_instr(OP_BGEU, IF_B, -1, $2, $4, $6, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+}
+;
+bgeu: BGEU REGISTER COMMA REGISTER COMMA IDENTIFIER
+{
+  ir_append_instr(OP_BGEU, IF_B, -1, $2, $4, 0, 
+                  $6, RELOC_BOFF, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+  free($6);
 }
 ;
 
@@ -590,15 +575,36 @@ j-type
 
 j: J imm
 {
-  set_format_j();
-  instruction.rd = 0;
-  instruction.imm = $2;
+  ir_append_instr(OP_JAL, IF_J, 0, -1, -1, $2, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
+;
+j: J IDENTIFIER
+{
+  ir_append_instr(OP_JAL, IF_J, 0, -1, -1, 0, 
+                  $2, RELOC_JTGT, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+  free($2);
+}
+;
 jal: JAL REGISTER COMMA imm
 {
-  set_format_j();
-  instruction.rd = $2;
-  instruction.imm = $4;
+  ir_append_instr(OP_JAL, IF_J, $2, -1, -1, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+}
+;
+jal: JAL REGISTER COMMA IDENTIFIER
+{
+  ir_append_instr(OP_JAL, IF_J, $2, -1, -1, 0, 
+                  $4, RELOC_JTGT, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
+  free($4);
 }
 ;
 
@@ -610,157 +616,50 @@ ui-type
 
 auipc: AUIPC REGISTER COMMA imm
 {
-  set_format_ui();
-  instruction.opcode = 0b0010111;
-  instruction.rd = $2;
-  instruction.imm = $4;
+  ir_append_instr(OP_AUIPC, IF_UI, $2, -1, -1, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 lui: LUI REGISTER COMMA imm
 {
-  set_format_ui();
-  instruction.opcode = 0b0110111;
-  instruction.rd = $2;
-  instruction.imm = $4;
+  ir_append_instr(OP_LUI, IF_UI, $2, -1, -1, $4, 
+                  NULL, RELOC_NONE, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 }
 ;
 la: LA REGISTER COMMA IDENTIFIER
 {
-  char *lbl = $4;
+  ir_append_instr(OP_AUIPC, IF_UI, $2, -1, -1, 0, 
+                  $4, RELOC_HI20, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 
-  set_format_ui();
-  instruction.opcode = 0b0010111;
-  instruction.rd = $2;
-  instruction.imm = label_high(lbl);
-  print_instruction(instruction);
+  ir_append_instr(OP_ADDI, IF_I, $2, $2, -1, 0, 
+                  $4, RELOC_LO12, cur_section, 
+                  pass_current_pc(), 4, yylineno);
+  pass_advance_pc(4);
 
-  set_format_i();
-  instruction.opcode = 0b0010011;
-  instruction.funct3 = 0;
-  instruction.rd = $2;
-  instruction.rs1 = $2;
-  instruction.imm = label_low(lbl);
-  print_instruction(instruction);
-
-  free(lbl);
+  free($4);
 }
+;
+
+align_pow2 : imm { $$ = $1; }
 ;
 
 imm : MINUS IMMEDIATE
 {
-$$ = -1 * $2;
+  $$ = -1 * $2;
 }
 | IMMEDIATE
 {
-$$ = $1;
+  $$ = $1;
 }
 ;
 %%
-static void print_instruction(struct instruction instruction) {
-  switch (instruction.format) {
-    case IF_R:
-      printbin(instruction.funct7, 7);
-      printbin(instruction.rs2, 5);
-      printbin(instruction.rs1, 5);
-      printbin(instruction.funct3, 3);
-      printbin(instruction.rd, 5);
-      printbin(instruction.opcode, 7);
-      break;
-    case IF_I:
-      printbin(instruction.imm, 12);
-      printbin(instruction.rs1, 5);
-      printbin(instruction.funct3, 3);
-      printbin(instruction.rd, 5);
-      printbin(instruction.opcode, 7);
-      break;
-    case IF_UI:
-      printbin(instruction.imm, 20);
-      printbin(instruction.rd, 5);
-      printbin(instruction.opcode, 7);
-      break;
-    case IF_S:
-      printbin(bit_range(instruction.imm, 5, 12), 7);
-      printbin(instruction.rs2, 5);
-      printbin(instruction.rs1, 5);
-      printbin(instruction.funct3, 3);
-      printbin(bit_range(instruction.imm, 0, 5), 5);
-      printbin(instruction.opcode, 7);
-      break;
-    case IF_B:
-      printbin(bit_range(instruction.imm, 12, 13), 1);
-      printbin(bit_range(instruction.imm, 5, 11), 6);
-      printbin(instruction.rs2, 5);
-      printbin(instruction.rs1, 5);
-      printbin(instruction.funct3, 3);
-      printbin(bit_range(instruction.imm, 1, 5), 4);
-      printbin(bit_range(instruction.imm, 11, 12), 1);
-      printbin(instruction.opcode, 7);
-      break;
-    case IF_J:
-      printbin(bit_range(instruction.imm, 20, 21), 1);
-      printbin(bit_range(instruction.imm, 1, 11), 10);
-      printbin(bit_range(instruction.imm, 11, 12), 1);
-      printbin(bit_range(instruction.imm, 12, 20), 8);
-      printbin(instruction.rd, 5);
-      printbin(instruction.opcode, 7);
-      break;
-    default:
-      exit(-1);
-  }
-  printf("\n");
-  pc += 4;
-}
-static void printbin(int val, int bits) {
-  for (int i = bits - 1; i >= 0; i--) {
-    if (val & (1 << i)) {
-      putchar('1');
-    } else {
-      putchar('0');
-    }
-  }
-}
-
-static int bit_range(int val, int begin, int end) {
-  unsigned int mask;
-  
-  if (end == 32) {
-    mask = 0xFFFFFFFF;
-  }
-  else {
-    mask = (1U << end) - 1;
-  }
-  
-  mask ^= (1u << begin) - 1;
-  return (val & mask) >> begin;
-}
 
 void yyerror(char *msg){
 
-}
-
-void set_format_r(){ instruction.format = IF_R; instruction.opcode = 0b0110011; }
-void set_format_i(){ instruction.format = IF_I; }
-void set_format_s(){ instruction.format = IF_S; instruction.opcode = 0b0100011; }
-void set_format_b(){ instruction.format = IF_B; instruction.opcode = 0b1100011; }
-void set_format_ui(){ instruction.format = IF_UI; }
-void set_format_j(){ instruction.format = IF_J; instruction.opcode = 0b1101111; }
-
-int label_high(char* label){
-  int target = search_sym(label);
-  int offset = target - pc;
-  return (offset + 0x800) >> 12;
-}
-
-int label_low(char* label){
-  int target = search_sym(label);
-  int offset = target - pc;
-  return offset & 0xFFF;
-}
-
-int main(){
- #ifdef YYDEBUG
- int yydebug = 1;
- #endif /* YYDEBUG */
- yyparse();
- return 0;
 }

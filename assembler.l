@@ -1,8 +1,10 @@
 %option noyywrap
+%option yylineno
 
 %{
 #include "assembler.tab.h"
 #include <string.h>
+#include <stdlib.h>
 extern YYSTYPE yylval;
 %}
 
@@ -65,8 +67,11 @@ jal                 return JAL;
 
 auipc               return AUIPC;
 lui                 return LUI;
-addr                return ADDR;
 la                  return LA;
+
+\.text              return DOT_TEXT;
+\.data              return DOT_DATA;
+\.align             return ALIGN;
 
 0x[0-9a-fA-F]+      yylval.l = strtol(yytext, NULL, 16); return IMMEDIATE;
 x([0-2]?[0-9]|3[0-1])   yylval.l = strtol(yytext + 1, NULL, 10); return REGISTER;
