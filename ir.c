@@ -55,7 +55,7 @@ static int ensure_capacity(size_t need) {
 void ir_append_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int32_t imm, const char* label, 
           reloc_kind_t rk, section_t sect, uint32_t addr, uint32_t size, int line) {
           if (!ensure_capacity(1)) {
-            fprintf(stderr, "Error: out of memory growing buffer (ir.c, line 19)\n");
+            fprintf(stderr, "Error: out of memory growing buffer (ir.c, line 57)\n");
             return;
           }
 
@@ -76,12 +76,12 @@ void ir_append_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int32_
           if (label) {
             char* label_copy = strdup(label);
             if (!label_copy) {
-              fprintf(stderr, "Error: label failed to duplicate (ir.c, line 39)\n");
+              fprintf(stderr, "Error: label failed to duplicate (ir.c, line 77)\n");
               return;
             }
             e.label = label_copy;
             if (e.reloc == RELOC_NONE) {
-              fprintf(stderr, "Warning: label present but reloc == RELOC_NONE (ir.c, line 45)\n");
+              fprintf(stderr, "Warning: label present but reloc == RELOC_NONE (ir.c, line 83)\n");
             }
           }
           else {
@@ -97,7 +97,7 @@ void ir_append_align(section_t sect, uint32_t addr_before, uint32_t pad_bytes, i
   if (pad_bytes == 0) { return; }
 
   if (!ensure_capacity(1)) {
-    fprintf(stderr, "Error: out of memory growing buffer (ir.c, line 60)\n");
+    fprintf(stderr, "Error: out of memory growing buffer (ir.c, line 99)\n");
     return;
   }
 
