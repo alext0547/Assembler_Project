@@ -15,6 +15,7 @@ extern uint32_t pc_text, pc_data;
 uint32_t pass_current_pc(void);
 void pass_advance_pc(uint32_t bytes);
 void pass_set_section(section_t s);
+section_t pass_get_section(void);
 uint32_t pass_align_current_pc(uint32_t pow2);
 
 // Computes the next address aligned to 2^pow2
