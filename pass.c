@@ -1,7 +1,8 @@
 #include <stdint.h>
 #include "pass.h"
 
-int pass_num = 1;
+static int text_entered = 0;
+int pass_num;
 section_t cur_section = SEC_TEXT;
 uint32_t pc_text = 0, pc_data = 0;
 
@@ -21,6 +22,9 @@ void pass_advance_pc(uint32_t bytes) {
 // Updates the section the assembler is processing
 void pass_set_section(section_t s) {
   cur_section = s;
+  if (s == SEC_TEXT) {
+    text_entered = 1;
+  }
 }
 
 // Returns the current section being processed by the assembler
@@ -40,6 +44,11 @@ uint32_t pass_align_current_pc(uint32_t pow2) {
     pc_data += offset;
     return pc_data;
   }
+}
+
+// Returns 1 if text section was entered, otherwise 0
+int pass_was_text_entered(void) {
+  return text_entered;
 }
 
 // Resets the pass back to default values, primarily for testing

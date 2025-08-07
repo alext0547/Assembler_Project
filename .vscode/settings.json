@@ -1,6 +1,7 @@
 {
   "files.associations": {
     "pass.h": "c",
-    "stdint.h": "c"
+    "stdint.h": "c",
+    "symtab.h": "c"
   }
 }

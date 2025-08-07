@@ -52,7 +52,7 @@ static int ensure_capacity(size_t need) {
 }
 
 // Append an instruction IR entry (duplicates label string if provided)
-void ir_append_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int32_t imm, const char* label, 
+void ir_append_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int64_t imm, const char* label, 
           reloc_kind_t rk, section_t sect, uint32_t addr, uint32_t size, int line) {
           if (!ensure_capacity(1)) {
             fprintf(stderr, "Error: out of memory growing buffer (ir.c, line 57)\n");
@@ -109,6 +109,25 @@ void ir_append_align(section_t sect, uint32_t addr_before, uint32_t pad_bytes, i
   e.addr = addr_before;
   e.size = pad_bytes;
   e.line = line;
+
+  buf[len++] = e;
+}
+
+// Appends a data entry to the IR buffer for the given section and address
+void ir_append_data(section_t sect, uint32_t addr, int64_t word, uint32_t size, int line) {
+  if (!ensure_capacity(1)) {
+    fprintf(stderr, "Error: out of memory growing buffer (ir.c, line 118)\n");
+    return;
+  }
+
+  ir_entry_t e = (ir_entry_t){0};
+  e.kind = IR_DATA;
+  e.sect = sect;
+  e.addr = addr;
+  e.size = size;
+  e.line = line;
+  e.imm = word;
+  e.reloc = RELOC_NONE;
 
   buf[len++] = e;
 }

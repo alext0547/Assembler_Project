@@ -2,6 +2,7 @@
 #define PASS_H
 
 #include <stdint.h>
+#include "symtab.h"
 
 typedef enum {
   SEC_TEXT,
@@ -11,12 +12,14 @@ typedef enum {
 extern int pass_num;
 extern section_t cur_section;
 extern uint32_t pc_text, pc_data;
+extern sym_t* symtab;
 
 uint32_t pass_current_pc(void);
 void pass_advance_pc(uint32_t bytes);
 void pass_set_section(section_t s);
 section_t pass_get_section(void);
 uint32_t pass_align_current_pc(uint32_t pow2);
+int pass_was_text_entered(void);
 
 // Computes the next address aligned to 2^pow2
 // Returns the newly aligned address
@@ -31,4 +34,15 @@ static inline uint32_t pass_align_pad(uint32_t addr, uint32_t pow2) {
   uint32_t aligned = pass_align_to_pow2(addr, pow2);
   return aligned - addr;
 }
+
+// Pass 1 functions
+void pass1_initialize(void);
+void pass1_finalize(void);
+void pass1_emit_instruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int64_t imm,
+                            const char* label, reloc_kind_t reloc, int lineno);
+void pass1_emit_label(char* label);
+void pass1_emit_align(uint32_t pad_bytes, int lineno);
+void pass1_emit_data(uint64_t word, uint32_t size, int lineno);
+void pass1_emit_space(uint64_t num_bytes, int lineno);
+
 #endif
