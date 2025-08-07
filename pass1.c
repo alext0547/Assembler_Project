@@ -6,6 +6,7 @@
 #include "pass.h"
 #include "symtab.h"
 #include "ir.h"
+#include "pass1.h"
 
 sym_t* symtab;
 

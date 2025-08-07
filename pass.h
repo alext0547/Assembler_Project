@@ -3,11 +3,7 @@
 
 #include <stdint.h>
 #include "symtab.h"
-
-typedef enum {
-  SEC_TEXT,
-  SEC_DATA,
-} section_t;
+#include "section.h"
 
 extern int pass_num;
 extern section_t cur_section;
@@ -34,15 +30,5 @@ static inline uint32_t pass_align_pad(uint32_t addr, uint32_t pow2) {
   uint32_t aligned = pass_align_to_pow2(addr, pow2);
   return aligned - addr;
 }
-
-// Pass 1 functions
-void pass1_initialize(void);
-void pass1_finalize(void);
-void pass1_emit_instruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int64_t imm,
-                            const char* label, reloc_kind_t reloc, int lineno);
-void pass1_emit_label(char* label);
-void pass1_emit_align(uint32_t pad_bytes, int lineno);
-void pass1_emit_data(uint64_t word, uint32_t size, int lineno);
-void pass1_emit_space(uint64_t num_bytes, int lineno);
 
 #endif

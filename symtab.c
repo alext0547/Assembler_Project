@@ -13,7 +13,7 @@ sym_t* create_symtab() {
   sym_t* sym_tab = (sym_t*)malloc(sizeof(sym_t));
   
   if (sym_tab == NULL) {
-    fprintf(stderr, "Error: Failed to allocate memory for symbol table (symtab.c, line 11)\n");
+    fprintf(stderr, "Error: Failed to allocate memory for symbol table (symtab.c, line 13)\n");
     return NULL;
   }
 
@@ -79,7 +79,7 @@ void resize_symtab(sym_t* symtab) {
   symtab->hash_table = (kvp_t**)calloc(new_size, sizeof(kvp_t*));
 
   if (!symtab->hash_table) {
-    fprintf(stderr, "Error: Failed to allocate memory during resizing (symtab.c, line 77)\n");
+    fprintf(stderr, "Error: Failed to allocate memory during resizing (symtab.c, line 79)\n");
     symtab->size = old_size;
     symtab->hash_table = old_table;
     return;
@@ -114,7 +114,7 @@ bool insert_sym(sym_t* symtab, const char* key, int value) {
     char* key_copy = (char*)malloc(strlen(key) + 1);
 
     if (new_node == NULL || key_copy == NULL) {
-      fprintf(stderr, "Error: Failed to allocate memory for node or key copy (symtab.c, lines 111-112)\n");
+      fprintf(stderr, "Error: Failed to allocate memory for node or key copy (symtab.c, lines 113-114)\n");
       return false;
     }
 
@@ -142,7 +142,7 @@ bool insert_sym(sym_t* symtab, const char* key, int value) {
     char* key_copy = (char*)malloc(strlen(key) + 1);
 
     if (new_node == NULL || key_copy == NULL) {
-      fprintf(stderr, "Error: Failed to allocate memory for node or key copy (symtab.c, lines 139-140)\n");
+      fprintf(stderr, "Error: Failed to allocate memory for node or key copy (symtab.c, lines 141-142)\n");
       return false;
     }
 
