@@ -50,11 +50,3 @@ uint32_t pass_align_current_pc(uint32_t pow2) {
 int pass_was_text_entered(void) {
   return text_entered;
 }
-
-// Resets the pass back to default values, primarily for testing
-void pass_reset(void) {
-  pass_num = 1;
-  cur_section = SEC_TEXT;
-  pc_text = 0;
-  pc_data = 0;
-}

@@ -36,7 +36,7 @@ void pass1_emit_align(uint32_t pad_bytes, int lineno) {
   pass_advance_pc(pad_bytes);
 }
 
-// Emits a 32-bit data word to the IR and advances program counter
+// Emits a 64-bit data word to the IR and advances program counter
 void pass1_emit_data(int64_t word, uint32_t size, int lineno) {
   section_t sect = cur_section;
   uint32_t addr = pass_current_pc();

@@ -89,9 +89,9 @@ typedef struct {
 } ir_entry_t;
 
 void ir_init(void);
-void ir_append_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int32_t imm, const char* label, 
+void ir_append_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int64_t imm, const char* label, 
           reloc_kind_t rk, section_t sect, uint32_t addr, uint32_t size, int line);
-void ir_append_data(section_t sect, uint32_t addr, uint32_t word, uint32_t size, int line);
+void ir_append_data(section_t sect, uint32_t addr, int64_t word, uint32_t size, int line);
 void ir_append_align(section_t sect, uint32_t addr_before, uint32_t pad_bytes, int line);
 size_t ir_count(void);
 const ir_entry_t* ir_get(size_t i);

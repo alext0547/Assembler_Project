@@ -26,7 +26,7 @@ sym_t* create_symtab() {
 
 // Uses djb2 algorithm to create an index for the symbol table
 // Returns the index after hashing
-int hash(const char* key, int table_size) {
+static int hash(const char* key, int table_size) {
   unsigned long hash = 5381;
 
   for (const char* ptr = key; *ptr != '\0'; ptr++) {
@@ -38,7 +38,7 @@ int hash(const char* key, int table_size) {
 
 // Checks to see if an integer n is a prime number or not
 // Returns true if prime, otherwise false
-bool is_prime(int n) {
+static bool is_prime(int n) {
   if (n < 2) {
     return false;
   }
@@ -60,7 +60,7 @@ bool is_prime(int n) {
 }
 
 // Finds the next prime number from integer n to infinity
-int find_next_prime(int n) {
+static int find_next_prime(int n) {
   while (true) {
     if (is_prime(n)) {
       return n;
@@ -70,7 +70,7 @@ int find_next_prime(int n) {
 }
 
 // Resizes the symbol table to be the next prime number after doubling the old size
-void resize_symtab(sym_t* symtab) {
+static void resize_symtab(sym_t* symtab) {
   kvp_t** old_table = symtab->hash_table;
   int old_size = symtab->size;
   int new_size = find_next_prime(old_size * 2);

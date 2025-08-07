@@ -7,4 +7,7 @@
 #include "pass.h"
 #include "ir.h"
 #include "symtab.h"
+#include "pass2.h"
 
+static FILE* outfile = NULL;
+static int had_error = 0;
