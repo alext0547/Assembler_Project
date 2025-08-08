@@ -112,29 +112,6 @@ static int32_t resolve_label(const char* label, reloc_kind_t reloc, uint32_t add
   }
 }
 
-// Dispatches to the correct RV32I encoder for the given format
-static bool encode_instruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int64_t imm, 
-                                   int lineno, uint32_t* out) {
-  switch (fmt) {
-    case IF_R:
-      return encode_rtype(op, rd, rs1, rs2, out);
-    case IF_I:
-      return encode_itype(op, rd, rs1, imm, lineno, out);
-    case IF_S:
-      return encode_stype(op, rs1, rs2, imm, lineno, out);
-    case IF_B:
-      return encode_btype(op, rs1, rs2, imm, lineno, out);
-    case IF_J: 
-      return encode_jtype(op, rd, imm, lineno, out);
-    case IF_UI:
-      return encode_uitype(op, rd, imm, lineno, out);
-    default:
-      fprintf(stderr, "Error (line %d): Unknown format\n", lineno);
-      had_error = 1;
-      return false;
-  }
-}
-
 // Packs an R-type instruction into a 32 bit word
 static bool encode_rtype(opcode_t op, int rd, int rs1, int rs2, uint32_t* out) {
   const encoding_info_t *info = &encoding_table[op];
@@ -288,6 +265,29 @@ static bool encode_uitype(opcode_t op, int rd, int64_t imm, int lineno, uint32_t
          (uint32_t)(info->opcode & 0x7F);
 
   return true;
+}
+
+// Dispatches to the correct RV32I encoder for the given format
+static bool encode_instruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int64_t imm, 
+                                   int lineno, uint32_t* out) {
+  switch (fmt) {
+    case IF_R:
+      return encode_rtype(op, rd, rs1, rs2, out);
+    case IF_I:
+      return encode_itype(op, rd, rs1, imm, lineno, out);
+    case IF_S:
+      return encode_stype(op, rs1, rs2, imm, lineno, out);
+    case IF_B:
+      return encode_btype(op, rs1, rs2, imm, lineno, out);
+    case IF_J: 
+      return encode_jtype(op, rd, imm, lineno, out);
+    case IF_UI:
+      return encode_uitype(op, rd, imm, lineno, out);
+    default:
+      fprintf(stderr, "Error (line %d): Unknown format\n", lineno);
+      had_error = 1;
+      return false;
+  }
 }
 
 // Resolves any symbolic relocation, encodes the isntruction, and writes the resulting 32-bit word to the output stream
