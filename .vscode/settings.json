@@ -2,6 +2,8 @@
   "files.associations": {
     "pass.h": "c",
     "stdint.h": "c",
-    "symtab.h": "c"
+    "symtab.h": "c",
+    "stdbool.h": "c",
+    "ir.h": "c"
   }
 }

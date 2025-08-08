@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <limits.h>
 #include "symtab.h"
 #include "pass.h"
 #include "ir.h"
@@ -21,8 +22,8 @@ extern int yylineno;
 }
 
 %token <s> IDENTIFIER STRING_LITERAL
-%token <ll> REGISTER
-%token <l> NEWLINE COMMA LEFT_PAREN RIGHT_PAREN MINUS IMMEDIATE
+%token <ll> REGISTER IMMEDIATE
+%token <l> NEWLINE COMMA LEFT_PAREN RIGHT_PAREN MINUS
 %token ADD SUB SLL SLT SLTU XOR SRL SRA OR AND NEG SNEZ
 %token ADDI SLLI LW SLTI SLTIU XORI ORI ANDI SRLI SRAI JALR LB LH LBU LHU RET LI MV NOP SUBI JR SEQZ
 %token SW SH SB
@@ -66,7 +67,7 @@ directive : DOT_TEXT { pass_set_section(SEC_TEXT);}
   }
 }
 | BYTE imm { 
-  if ($2 < -128LL || $2 > 127LL) { 
+  if ($2 < INT8_MIN || $2 > INT8_MAX) { 
     char buf[100];
     snprintf(buf, sizeof(buf), "Value %lld out of range for .byte", $2);
     yyerror(buf);
@@ -74,7 +75,7 @@ directive : DOT_TEXT { pass_set_section(SEC_TEXT);}
   else { pass1_emit_data($2, 1, yylineno);  }
 }
 | HALF imm { 
-  if ($2 < -32768LL || $2 > 32767LL) { 
+  if ($2 < INT16_MIN || $2 > INT16_MAX) { 
     char buf[100];
     snprintf(buf, sizeof(buf), "Value %lld out of range for .half", $2);
     yyerror(buf);
@@ -82,7 +83,7 @@ directive : DOT_TEXT { pass_set_section(SEC_TEXT);}
   else { pass1_emit_data($2, 2, yylineno);  }
 }
 | WORD imm { 
-  if ($2 < -2147483648LL || $2 > 2147483647LL) { 
+  if ($2 < INT32_MIN || $2 > INT32_MAX) { 
     char buf[100];
     snprintf(buf, sizeof(buf), "Value %lld out of range for .word", $2);
     yyerror(buf);
