@@ -7,9 +7,11 @@
 #include "symtab.h"
 #include "pass.h"
 #include "ir.h"
+#include "pass1.h"
+#include "pass2.h"
 
 int yylex(void);
-void yyerror(char* s);
+void yyerror(const char* s);
 extern int yylineno;
 %}
 
@@ -38,15 +40,15 @@ extern int yylineno;
 %%
 program : segments
 ;
-segments : /* empty */
+segments : %empty
 | segments segment
 ;
 segment : label_list opt_item NEWLINE
 ;
-label_list : /* empty */
+label_list : %empty
 | label_list label
 ;
-opt_item : /* empty */
+opt_item : %empty
 | instruction
 | directive
 ;
@@ -594,6 +596,7 @@ imm : MINUS IMMEDIATE
 ;
 %%
 
-void yyerror(char *msg){
-
+void yyerror(const char *msg){
+  fprintf(stderr, "Parse error (line: %d): %s\n", yylineno, msg);
+  pass2_report_error();
 }

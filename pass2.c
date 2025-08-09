@@ -73,6 +73,11 @@ void pass2_initialize(void) {
   seen_text = false;
 }
 
+// Changes had_error to 1 if an error was detected elsewhere (not in pass2.c)
+void pass2_report_error(void) {
+  had_error = 1;
+}
+
 // Registers the output file where the final binary data will be written
 void pass2_set_output(FILE* f) {
   outfile = f;

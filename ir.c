@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 static const char* const SECTION_NAMES[] = { ".text", ".data" };
 static const char* const KIND_NAMES[] = { "INSTR", "DATA", "ALIGN" };
@@ -155,7 +156,7 @@ void ir_dump_summary(size_t max_rows) {
     const char* opstr = (e->kind == IR_INSTR) ? op_name(e->op) : "-";
     printf("Index: %zu, Section: %s, Address: 0x%08x, Size: %u,"
            " Kind: %s, Op Name: %s, Format: %s, rd: %d, "
-           "rs1: %d, rs2: %d, imm: %d, Label: %s, Reloc: %s, Line: %d\n", 
+           "rs1: %d, rs2: %d, imm: %" PRId64 ", Label: %s, Reloc: %s, Line: %d\n", 
     i, 
     sect_name(e->sect), 
     (unsigned)e->addr, 
@@ -164,7 +165,7 @@ void ir_dump_summary(size_t max_rows) {
     opstr, 
     fmt_name(e->fmt), 
     e->rd, e->rs1, e->rs2, 
-    e->imm, 
+    (int64_t)e->imm, 
     e->label ? e->label : "-", 
     reloc_name(e->reloc), 
     e->line);
