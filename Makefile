@@ -5,22 +5,35 @@ CC = gcc
 BISON = bison
 FLEX = flex
 
+# Dirs
+SRCDIR = Assembler/src
+INCDIR = Assembler/include
+
 # Flags
-CFLAGS = -std=c11 -O2 -Wall -Wextra -g -MMD -MP
-LDFLAGS =
+CPPFLAGS = -I$(INCDIR)
+CFLAGS = -std=c11 -O2 -Wall -Wextra -g -MMD -MP -D_POSIX_C_SOURCE=200809L
 LDLIBS = -lm -lfl
 
 # Source files
-BISON_SRC = assembler.y
-FLEX_SRC = assembler.l
+BISON_SRC = $(SRCDIR)/assembler.y
+FLEX_SRC = $(SRCDIR)/assembler.l
 
 # Generated files
-PARSER_C = assembler.tab.c
-PARSER_H = assembler.tab.h
-LEXER_C = lex.yy.c
+PARSER_C = $(SRCDIR)/assembler.tab.c
+PARSER_H = $(SRCDIR)/assembler.tab.h
+LEXER_C = $(SRCDIR)/lex.yy.c
 
 # Project sources
-SRCS = main.c pass.c pass1.c pass2.c ir.c symtab.c $(PARSER_C) $(LEXER_C)
+SRCS = \
+$(SRCDIR)/main.c \
+$(SRCDIR)/pass.c \
+$(SRCDIR)/pass1.c \
+$(SRCDIR)/pass2.c \
+$(SRCDIR)/ir.c \
+$(SRCDIR)/symtab.c \
+$(PARSER_C) \
+$(LEXER_C)
+
 OBJS = $(SRCS:.c=.o)
 DEPS = $(OBJS:.o=.d)
 
@@ -29,17 +42,16 @@ EXEC = assembler
 all: $(EXEC)
 
 # Bison: parser
-$(PARSER_C) $(PARSER_H): $(BISON_SRC)
-	$(BISON) -Wall -d -o $(PARSER_C) $(BISON_SRC)
+$(PARSER_C) $(PARSER_H): $(SRCDIR)/assembler.y
+	$(BISON) -Wall -d -o $(PARSER_C) $<
 
 # Flex: lexer
-$(LEXER_C): $(FLEX_SRC) $(PARSER_H)
-	$(FLEX) -o $@ $<
+$(LEXER_C): $(SRCDIR)/assembler.l $(PARSER_H)
+	$(FLEX) -o $(LEXER_C) $<
 
 # Compile .c -> .o
-CFLAGS += -D_POSIX_C_SOURCE=200809L
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 # Link
 $(EXEC): $(OBJS)

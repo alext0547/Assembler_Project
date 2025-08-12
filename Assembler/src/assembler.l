@@ -51,6 +51,8 @@ nop                 return NOP;
 subi                return SUBI;
 jr                  return JR;
 seqz                return SEQZ;
+ebreak              return EBREAK;
+ecall               return ECALL;
 
 sw                  return SW;
 sh                  return SH;
