@@ -14,7 +14,7 @@ extern YYSTYPE yylval;
 %%
 [ \t]+              ;
 "#".*               ;
-\r?\n               return NEWLINE;
+(\r)?\n               return NEWLINE;
 
 add                 return ADD;
 sub                 return SUB;
@@ -92,7 +92,7 @@ x([0-2]?[0-9]|3[0-1])/[^A-Za-z0-9_]   yylval.ll = strtoll(yytext + 1, NULL, 10);
 [0-9]+              yylval.ll = strtoll(yytext, NULL, 10); return IMMEDIATE;
 [a-zA-Z_][a-zA-Z0-9_]*  yylval.s = strdup(yytext); return IDENTIFIER;
 
-\"([^\\\n]|(\\.))*\" {
+\"([^\\\r\n"]|(\\.))*\" {
   size_t n = yyleng;
   char* s = (char*)malloc(n - 1);
   if (!s) {
@@ -105,7 +105,7 @@ x([0-2]?[0-9]|3[0-1])/[^A-Za-z0-9_]   yylval.ll = strtoll(yytext + 1, NULL, 10);
   return STRING_LITERAL;
 }
 
-\"([^\\\n]|(\\.))*\r?\n {
+\"([^\\\r\n"]|(\\.))*(\r)?\n {
   fprintf(stderr, "Unterminated string at line %d\n", yylineno);
   return NEWLINE;
 }

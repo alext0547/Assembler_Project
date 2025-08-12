@@ -25,6 +25,7 @@ void pass1_emit_instruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2,
   uint32_t size = 4;
 
   ir_append_instr(op, fmt, rd, rs1, rs2, imm, label, reloc, sect, addr, size, lineno);
+  pass_advance_pc(4);
 }
 
 // Emits an alignment directive and advances the program counter by the padding
