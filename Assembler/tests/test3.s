@@ -1,3 +1,4 @@
+# Test 03: While loop coverage
 # while (i < n) { if (i & 1) sum += i; i++; }
 
 .text

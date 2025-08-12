@@ -29,12 +29,18 @@ void pass1_emit_instruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2,
 }
 
 // Emits an alignment directive and advances the program counter by the padding
-void pass1_emit_align(uint32_t pad_bytes, int lineno) {
+void pass1_emit_align(uint32_t pow2, int lineno) {
   section_t sect = cur_section;
   uint32_t addr = pass_current_pc();
 
-  ir_append_align(sect, addr, pad_bytes, lineno);
-  pass_advance_pc(pad_bytes);
+  if (pow2 > 31) pow2 = 31;
+
+  uint32_t align = 1u << pow2;
+  uint32_t pad = (align - (addr % align)) % align;
+  if(pad) {
+    ir_append_align(sect, addr, pad, lineno);
+    pass_advance_pc(pad);
+  }
 }
 
 // Emits a 64-bit data word to the IR and advances program counter
@@ -68,6 +74,6 @@ void pass1_emit_space(uint64_t num_bytes, int lineno) {
   section_t sect = cur_section;
   uint32_t addr = pass_current_pc();
 
-  ir_append_data(sect, addr, 0, num_bytes, lineno);
+  ir_append_align(sect, addr, num_bytes, lineno);
   pass_advance_pc(num_bytes);
 }

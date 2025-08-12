@@ -1,4 +1,4 @@
-# Stress the data directives, alignment, and spacing.
+# Test 05: Stress the data directives, alignment, and spacing.
 
 .data
   .align 3           # align to 8

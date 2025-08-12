@@ -1,3 +1,4 @@
+# Test 02: If statement coverage
 # if (x < y) t = 1;
 # else if (x == y) t = 2;
 # else t = 3;
