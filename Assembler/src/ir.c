@@ -11,10 +11,12 @@ static const char* const KIND_NAMES[] = { "INSTR", "DATA", "ALIGN" };
 static const char* const FMT_NAMES[] = { "R", "I", "S", "B", "J", "UI" };
 static const char* const RELOC_NAMES[] = { "NONE", "HI20", "LO12", "BOFF", "JTGT" };
 static const char* const OPCODE_NAMES[] = { 
-  "ADD", "SUB", "SLL", "SLT", "SLTU", "XOR", "SRL", "SRA", "OR", "AND", "ADDI",
-  "SLLI", "LW", "SLTI", "SLTIU", "XORI", "ORI", "ANDI", "SRLI", "SRAI", "JALR", "LB", "LH", "LBU", "LHU","ECALL","EBREAK",
+  "ADD", "SUB", "SLL", "SLT", "SLTU", "XOR", "SRL", "SRA", "OR", "AND", "MUL", "MULH", "MULHSU", "MULHU", "DIV",
+  "DIVU", "REM", "REMU", "ADDW", "SUBW", "SLLW", "SRLW", "SRAW", "MULW", "DIVW", "DIVUW", "REM", "REMW",
+  "ADDI", "SLLI", "LW", "SLTI", "SLTIU", "XORI", "ORI", "ANDI", "SRLI", "SRAI", "JALR", "LB", "LH", "LBU", "LHU",
+  "ECALL","EBREAK", "ADDIW", "SLLIW", "SRLIW", "SRAIW", "LWU", "LD",
   "AUIPC", "LUI",
-  "SW", "SH","SB",
+  "SW", "SH","SB", "SD",
   "BEQ", "BNE", "BLT", "BGE", "BLTU", "BGEU",
   "JAL" };
 

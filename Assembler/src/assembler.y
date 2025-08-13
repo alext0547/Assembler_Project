@@ -26,9 +26,11 @@ extern int yylineno;
 %token <s> IDENTIFIER STRING_LITERAL
 %token <ll> REGISTER IMMEDIATE
 %token <l> NEWLINE COMMA LEFT_PAREN RIGHT_PAREN MINUS
-%token ADD SUB SLL SLT SLTU XOR SRL SRA OR AND NEG SNEZ
+%token ADD SUB SLL SLT SLTU XOR SRL SRA OR AND NEG SNEZ MUL MULH MULHSU MULHU DIV DIVU REM REMU ADDW SUBW SLLW SRLW 
+%token SRAW MULW DIVW DIVUW REMW REMUW
 %token ADDI SLLI LW SLTI SLTIU XORI ORI ANDI SRLI SRAI JALR LB LH LBU LHU RET LI MV NOP SUBI JR SEQZ ECALL EBREAK
-%token SW SH SB
+%token ADDIW SLLIW SRLIW SRAIW LWU LD
+%token SW SH SB SD
 %token BEQ BNE BLT BGE BLTU BGEU BEQZ BNEZ
 %token J JAL
 %token AUIPC LUI LA
@@ -146,6 +148,19 @@ r_type
   | and
   | neg
   | snez
+  | mul
+  | mulh
+  | mulhsu
+  | mulhu
+  | div
+  | divu
+  | rem
+  | remu
+  | mulw
+  | divw
+  | divuw
+  | remw
+  | remuw
 ;
 
 add: ADD REGISTER COMMA REGISTER COMMA REGISTER
@@ -220,6 +235,120 @@ and: AND REGISTER COMMA REGISTER COMMA REGISTER
                          NULL, RELOC_NONE, yylineno);
 }
 ;
+mul: MUL REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_MUL, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+mulh: MULH REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_MULH, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+mulhsu: MULHSU REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_MULHSU, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+mulhu: MULHU REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_MULHU, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+div: DIV REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_DIV, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+divu: DIVU REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_DIVU, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+rem: REM REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_REM, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+remu: REMU REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_REMU, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+addw: ADDW REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_ADDW, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+subw: SUBW REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_SUBW, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+sllw: SLLW REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_SLLW, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+srlw: SRLW REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_SRLW, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+sraw: SRAW REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_SRAW, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+remu: REMU REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_REMU, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+mulw: MULW REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_MULW, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+divw: DIVW REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_DIVW, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+divuw: DIVUW REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_DIVUW, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+remw: REMW REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_REMW, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+remuw: REMUW REGISTER COMMA REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_REMUW, IF_R, $2, $4, $6, 0, 
+                         NULL, RELOC_NONE, yylineno);
+}
+;
 
 i_type 
   : addi
@@ -246,6 +375,12 @@ i_type
   | seqz
   | ebreak
   | ecall
+  | addiw
+  | srliw
+  | sraiw
+  | slliw
+  | lwu
+  | ld
 ;
 
 addi: ADDI REGISTER COMMA REGISTER COMMA imm
@@ -392,11 +527,48 @@ ecall: ECALL
                          NULL, RELOC_NONE, yylineno);
 }
 ;
+addiw: ADDIW REGISTER COMMA REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_ADDIW, IF_I, $2, $4, 0, $6,
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+slliw: SLLIW REGISTER COMMA REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_SLLIW, IF_I, $2, $4, 0, $6,
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+srliw: SRLIW REGISTER COMMA REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_SRLIW, IF_I, $2, $4, 0, $6,
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+sraiw: SRAIW REGISTER COMMA REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_SRAIW, IF_I, $2, $4, 0, $6,
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+lwu: LWU REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
+{
+  pass1_emit_instruction(OP_LWU, IF_I, $2, $6, 0, $4,
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+ld: LD REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
+{
+  pass1_emit_instruction(OP_LD, IF_I, $2, $6, 0, $4,
+                         NULL, RELOC_NONE, yylineno);
+}
+;
 
 s_type 
   : sw
   | sb
   | sh
+  | sd
 ;
 
 sw: SW REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
@@ -414,6 +586,12 @@ sb: SB REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 sh: SH REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
 {
   pass1_emit_instruction(OP_SH, IF_S, 0, $6, $2, $4,
+                         NULL, RELOC_NONE, yylineno);
+}
+;
+sd: SD REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
+{
+  pass1_emit_instruction(OP_SD, IF_S, 0, $6, $2, $4,
                          NULL, RELOC_NONE, yylineno);
 }
 ;

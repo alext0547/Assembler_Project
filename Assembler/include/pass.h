@@ -9,6 +9,8 @@ extern int pass_num;
 extern section_t cur_section;
 extern uint32_t pc_text, pc_data;
 extern sym_t* symtab;
+extern int xlen;
+extern bool extM;
 
 uint32_t pass_current_pc(void);
 void pass_advance_pc(uint32_t bytes);

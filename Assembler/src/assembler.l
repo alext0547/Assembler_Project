@@ -28,6 +28,23 @@ or                  return OR;
 and                 return AND;
 neg                 return NEG;
 snez                return SNEZ;
+mul                 return MUL; 
+mulh                return MULH; 
+mulhsu              return MULHSU;
+div                 return DIV; 
+divu                return DIVU; 
+rem                 return REM; 
+remu                return REMU;
+addw                return ADDW; 
+subw                return SUBW; 
+sllw                return SLLW; 
+srlw                return SRLW; 
+sraw                return SRAW;
+mulw                return MULW; 
+divw                return DIVW; 
+divuw               return DIVUW; 
+remw                return REMW; 
+remuw               return REMUW;
 
 addi                return ADDI;
 slli                return SLLI;
@@ -53,10 +70,17 @@ jr                  return JR;
 seqz                return SEQZ;
 ebreak              return EBREAK;
 ecall               return ECALL;
+addiw               return ADDIW; 
+slliw               return SLLIW; 
+srliw               return SRLIW; 
+sraiw               return SRAIW; 
+lwu                 return LWU; 
+ld                  return LD;
 
 sw                  return SW;
 sh                  return SH;
 sb                  return SB;
+SD
 
 beq                 return BEQ;
 bne                 return BNE;

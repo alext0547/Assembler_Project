@@ -13,6 +13,8 @@ sym_t* symtab;
 // Initializes global state for pass1
 void pass1_initialize(void) {
   pass_num = 1;
+  xlen = 32;
+  extM = false;
   symtab = create_symtab();
   ir_init();
 }
