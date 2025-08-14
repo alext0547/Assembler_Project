@@ -1,10 +1,13 @@
 #include <stdint.h>
 #include "pass.h"
+#include <stdbool.h>
 
 static int text_entered = 0;
 int pass_num;
 section_t cur_section = SEC_TEXT;
 uint32_t pc_text = 0, pc_data = 0;
+static int xlen = 32;
+static bool extM = false;
 
 // Returns the current value of the program counter depending on which section the assembler is processing
 uint32_t pass_current_pc(void) {
@@ -49,4 +52,21 @@ uint32_t pass_align_current_pc(uint32_t pow2) {
 // Returns 1 if text section was entered, otherwise 0
 int pass_was_text_entered(void) {
   return text_entered;
+}
+
+// Sets the target ISA width and toggles the M extension
+void pass_set_arch(int len, bool hasM) {
+  if (len != 32 && len != 64) len = 32;
+  xlen = len;
+  extM = hasM;
+}
+
+// Returns the currently selected XLEN
+int pass_get_xlen(void) {
+  return xlen;
+}
+
+// Reports whether the M extension is enabled
+bool pass_has_M(void) {
+  return extM;
 }

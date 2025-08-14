@@ -161,6 +161,11 @@ r_type
   | divuw
   | remw
   | remuw
+  | addw
+  | subw
+  | sllw
+  | srlw
+  | sraw
 ;
 
 add: ADD REGISTER COMMA REGISTER COMMA REGISTER
@@ -310,12 +315,6 @@ srlw: SRLW REGISTER COMMA REGISTER COMMA REGISTER
 sraw: SRAW REGISTER COMMA REGISTER COMMA REGISTER
 {
   pass1_emit_instruction(OP_SRAW, IF_R, $2, $4, $6, 0, 
-                         NULL, RELOC_NONE, yylineno);
-}
-;
-remu: REMU REGISTER COMMA REGISTER COMMA REGISTER
-{
-  pass1_emit_instruction(OP_REMU, IF_R, $2, $4, $6, 0, 
                          NULL, RELOC_NONE, yylineno);
 }
 ;
@@ -654,7 +653,7 @@ bnez: BNEZ REGISTER COMMA imm
 ;
 bnez: BNEZ REGISTER COMMA IDENTIFIER
 {
-  pass1_emit_instruction(OP_BEQ, IF_B, 0, $2, 0, 0,
+  pass1_emit_instruction(OP_BNE, IF_B, 0, $2, 0, 0,
                          $4, RELOC_BOFF, yylineno);
   free($4);
 }

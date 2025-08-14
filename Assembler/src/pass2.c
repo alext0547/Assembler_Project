@@ -138,6 +138,48 @@ static bool write_bytes(const void *buf, size_t n) {
   return true;
 }
 
+// Ensures the incorrect xlen isn't being used
+static bool require_xlen(int need, int lineno) {
+  if (pass_get_xlen() != need) {
+    fprintf(stderr, "Error (line %d): instruction requires RV%d but assembler is RV%d\n", 
+            lineno, need, pass_get_xlen());
+    return false;
+  }
+  return true;
+}
+
+// Ensures the M extension is enabled when using M extended instructions
+static bool require_M(int lineno) {
+  if (!pass_has_M()) {
+    fprintf(stderr, "Error (line %d): M-extension instruction used but M not enabled\n", lineno);
+    return false;
+  }
+  return true;
+}
+
+// Ensures the correct xlen and M extension flag is set based on the instruction opcode
+static bool require_for_op(opcode_t op, int lineno) {
+  switch (op) {
+    case OP_ADDW: case OP_SUBW: case OP_SLLW:
+    case OP_SRLW: case OP_SRAW: case OP_ADDIW:
+    case OP_SRLIW: case OP_SRAIW: case OP_SLLIW: 
+    case OP_LWU: case OP_LD: case OP_SD:
+      return require_xlen(64, lineno);
+    
+    case OP_MUL: case OP_MULH: case OP_MULHSU:
+    case OP_MULHU: case OP_DIV: case OP_DIVU:
+    case OP_REM: case OP_REMU: 
+      return require_M(lineno);
+    
+    case OP_MULW: case OP_DIVW: case OP_DIVUW:
+    case OP_REMW: case OP_REMUW:
+      return require_M(lineno) && require_xlen(64, lineno);
+    
+    default:
+      return true;
+  }
+}
+
 // Emit n zero bytes efficiently for .space and alignment
 static bool write_zeros(size_t n) {
   static const unsigned char Z[4096] = {0};
@@ -221,29 +263,53 @@ static bool encode_rtype(opcode_t op, int rd, int rs1, int rs2, uint32_t* out) {
 static bool encode_itype(opcode_t op, int rd, int rs1, int64_t imm, int lineno, uint32_t* out) {
   const encoding_info_t *info = &encoding_table[op];
 
-  if (op == OP_SLLI || op == OP_SRLI || op == OP_SRAI) {
-    if (imm < 0 || imm > 31) {
-      fprintf(stderr, "Error: (line %d): Invalid immediate %" PRId64 " entered\n", lineno, imm);
+  // Shift-immediate group: RV32 (SLLI/SRLI/SRAI), RV64 (same), and RV64W (SLLIW/SRLIW/SRAIW)
+  if (op == OP_SLLI || op == OP_SRLI || op == OP_SRAI ||
+      op == OP_SLLIW || op == OP_SRLIW || op == OP_SRAIW) {
+
+    bool is_word = (op == OP_SLLIW || op == OP_SRLIW || op == OP_SRAIW);
+    uint32_t max_shamt = is_word ? 31u : (pass_get_xlen() == 64 ? 63u : 31u);
+
+    if (imm < 0 || (uint64_t)imm > max_shamt) {
+      fprintf(stderr, "Error: (line %d): Invalid immediate %" PRId64 " (max %u)\n", lineno, imm, max_shamt);
       had_error = 1;
       return false;
     }
-    uint32_t shamt = (uint32_t)imm & 0x1F;
-    *out = ((uint32_t)info->funct7 << 25) |
-           (shamt << 20) |
-           ((uint32_t)(rs1 & 0x1F) << 15) |
-           ((uint32_t)(info->funct3 & 0x07) << 12) |
-           ((uint32_t)(rd & 0x1F) << 7) |
-           (uint32_t)(info->opcode & 0x7F);
-    return true;
+
+    uint32_t shamt = (uint32_t)imm;
+
+    if (!is_word && pass_get_xlen() == 64) {
+      // RV64 non-W shifts use funct6 in bits [31:26] and shamt[5:0] in [25:20]
+      uint32_t f6 = info->funct7 & 0x3F;
+      if (op == OP_SRAI) f6 = 0x10; // RV64 SRAI is funct6=010000b (not 0x20)
+      *out = (f6 << 26) |
+             ((shamt & 0x3F) << 20) |
+             ((uint32_t)(rs1 & 0x1F) << 15) |
+             ((uint32_t)(info->funct3 & 0x07) << 12) |
+             ((uint32_t)(rd  & 0x1F) << 7) |
+             (uint32_t)(info->opcode & 0x7F);
+      return true;
+    } 
+    else {
+      // RV32 and RV64W shifts use funct7 in [31:25] and shamt[4:0] in [24:20]
+      *out = (((uint32_t)info->funct7 & 0x7F) << 25) |
+             ((shamt & 0x1F) << 20) |
+             ((uint32_t)(rs1 & 0x1F) << 15) |
+             ((uint32_t)(info->funct3 & 0x07) << 12) |
+             ((uint32_t)(rd  & 0x1F) << 7) |
+             (uint32_t)(info->opcode & 0x7F);
+      return true;
+    }
   }
   else if (op == OP_EBREAK || op == OP_ECALL) {
     imm = (op == OP_EBREAK) ? 1 : 0;
     rs1 = 0;
-    rd = 0;
+    rd  = 0;
   }
 
+  // Regular I-type immediates
   if (imm < -2048 || imm > 2047) {
-    fprintf(stderr, "Error: (line %d): Invalid immediate %" PRId64 " entered\n", lineno, imm);
+    fprintf(stderr, "Error: (line %d): Invalid immediate %" PRId64 "\n", lineno, imm);
     had_error = 1;
     return false;
   }
@@ -254,7 +320,6 @@ static bool encode_itype(opcode_t op, int rd, int rs1, int64_t imm, int lineno, 
          ((uint32_t)(info->funct3 & 0x07) << 12) |
          ((uint32_t)(rd & 0x1F) << 7) |
          (uint32_t)(info->opcode & 0x7F);
-
   return true;
 }
 
@@ -389,6 +454,11 @@ bool pass2_emit_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2,
   if (had_error) return false;
   if (!outfile) {
     fprintf(stderr, "Error: no output file set before emitting instruction (line %d)\n", lineno);
+    had_error = 1;
+    return false;
+  }
+
+  if (!require_for_op(op, lineno)) {
     had_error = 1;
     return false;
   }

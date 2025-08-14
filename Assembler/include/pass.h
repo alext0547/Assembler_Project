@@ -4,13 +4,12 @@
 #include <stdint.h>
 #include "symtab.h"
 #include "section.h"
+#include <stdbool.h>
 
 extern int pass_num;
 extern section_t cur_section;
 extern uint32_t pc_text, pc_data;
 extern sym_t* symtab;
-extern int xlen;
-extern bool extM;
 
 uint32_t pass_current_pc(void);
 void pass_advance_pc(uint32_t bytes);
@@ -18,6 +17,9 @@ void pass_set_section(section_t s);
 section_t pass_get_section(void);
 uint32_t pass_align_current_pc(uint32_t pow2);
 int pass_was_text_entered(void);
+void pass_set_arch(int len, bool hasM);
+int pass_get_xlen(void);
+bool pass_has_M(void);
 
 // Computes the next address aligned to 2^pow2
 // Returns the newly aligned address

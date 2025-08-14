@@ -31,6 +31,7 @@ snez                return SNEZ;
 mul                 return MUL; 
 mulh                return MULH; 
 mulhsu              return MULHSU;
+mulhu               return MULHU;
 div                 return DIV; 
 divu                return DIVU; 
 rem                 return REM; 
@@ -80,7 +81,7 @@ ld                  return LD;
 sw                  return SW;
 sh                  return SH;
 sb                  return SB;
-SD
+sd                  return SD;
 
 beq                 return BEQ;
 bne                 return BNE;
