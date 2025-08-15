@@ -34,6 +34,8 @@ extern int yylineno;
 %token BEQ BNE BLT BGE BLTU BGEU BEQZ BNEZ
 %token J JAL
 %token AUIPC LUI LA
+%token C_ADD C_SUB C_XOR C_OR C_AND C_SUBW C_ADDW C_MV C_JR C_JALR C_EBREAK C_ADDI C_ADDIW C_SRLI C_ANDI C_LI C_LUI
+%token C_LW C_LD C_SW C_SD C_LWSP C_LDSP C_SWSP C_SDSP C_BEQZ C_BNEZ C_J C_JAL C_SLLI
 %token DOT_TEXT DOT_DATA ALIGN
 %token WORD BYTE HALF DWORD ASCII ASCIIZ SPACE
 %type <ll> imm 
@@ -133,6 +135,14 @@ instruction
   | s_type
   | b_type
   | j_type
+  | cr_type
+  | ci_type
+  | cl_type
+  | cs_type
+  | css_type
+  | cb_type
+  | cj_type
+  | ca_type
 ;
 
 r_type 
@@ -770,6 +780,228 @@ la: LA REGISTER COMMA IDENTIFIER
                          $4, RELOC_LO12, yylineno);
 
   free($4);
+}
+;
+
+ca_type
+  : c.sub
+  | c.xor
+  | c.or
+  | c.and
+  | c.subw
+  | c.addw
+
+c.sub: C_SUB REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_C_SUB, IF_CA, $2, $2, $4, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+c.xor: C_XOR REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_C_XOR, IF_CA, $2, $2, $4, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+c.or: C_OR REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_C_OR, IF_CA, $2, $2, $4, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+c.and: C_AND REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_C_AND, IF_CA, $2, $2, $4, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+c.subw: C_SUBW REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_C_SUBW, IF_CA, $2, $2, $4, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+c.addw: C_ADDW REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_C_ADDW, IF_CA, $2, $2, $4, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+
+cr_type
+  : c.add
+  | c.jalr
+  | c.ebreak
+  | c.jr
+  | c.mv
+
+c.add: C_ADD REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_C_ADD, IF_CR, $2, $2, $4, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+c.jalr: C_JALR REGISTER
+{
+  pass1_emit_instruction(OP_C_JALR, IF_CR, 0, $2, 0, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+c.ebreak: C_EBREAK
+{
+  pass1_emit_instruction(OP_C_EBREAK, IF_CR, 0, 0, 0, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+c.jr: C_JR REGISTER
+{
+  pass1_emit_instruction(OP_C_JR, IF_CR, 0, $2, 0, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+c.mv: C_MV REGISTER COMMA REGISTER
+{
+  pass1_emit_instruction(OP_C_MV, IF_CR, $2, 0, $4, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+
+ci_type
+  : c.addi
+  | c.addiw
+  | c.srli
+  | c.srai
+  | c.andi
+  | c.lui
+  | c.lwsp
+  | c.ldsp
+
+c.addi: C_ADDI REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_ADDI,  IF_CI, $2, $2, 0,  $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.addiw: C_ADDIW REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_ADDIW,  IF_CI, $2, $2, 0,  $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.srli: C_SRLI REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_SRLI,  IF_CI, $2, $2, 0,  $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.srai: C_SRAI REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_SRAI,  IF_CI, $2, $2, 0,  $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.andi: C_ANDI REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_ANDI,  IF_CI, $2, $2, 0,  $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.lui: C_LUI REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_LUI,  IF_CI, $2, 0, 0,  $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.lwsp: C_LWSP REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_LWSP,  IF_CI, $2, 2, 0,  $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.ldsp: C_LDSP REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_LDSP,  IF_CI, $2, 2, 0,  $4, NULL, RELOC_NONE, yylineno);
+}
+;
+
+cl_type
+  : c.lw
+  | c.ld
+
+c.lw: C_LW REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
+{
+  pass1_emit_instruction(OP_C_LW, IF_CL, $2, $6, 0, $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.ld: C_LD REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
+{
+  pass1_emit_instruction(OP_C_LD, IF_CL, $2, $6, 0, $4, NULL, RELOC_NONE, yylineno);
+}
+;
+
+cs_type
+  : c.sw
+  | c.sd
+
+c.sw: C_SW REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
+{
+  pass1_emit_instruction(OP_C_SW, IF_CS, 0, $6, $2, $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.sd: C_SD REGISTER COMMA imm LEFT_PAREN REGISTER RIGHT_PAREN
+{
+  pass1_emit_instruction(OP_C_SD, IF_CS, 0, $6, $2, $4, NULL, RELOC_NONE, yylineno);
+}
+;
+
+cb_type
+  : c.beqz
+  | c.bnez
+
+c.beqz: C_BEQZ REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_BEQZ, IF_CB, 0, $2, 0, $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.beqz: C_BEQZ REGISTER COMMA IDENTIFIER
+{
+  pass1_emit_instruction(OP_C_BEQZ, IF_CB, 0, $2, 0, 0, $4, RELOC_BOFF, yylineno);
+  free($4);
+}
+;
+c.bnez: C_BNEZ REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_BNEZ, IF_CB, 0, $2, 0, $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.bnez: C_BNEZ REGISTER COMMA IDENTIFIER
+{
+  pass1_emit_instruction(OP_C_BNEZ, IF_CB, 0, $2, 0, 0, $4, RELOC_BOFF, yylineno);
+  free($4);
+}
+;
+
+cj_type
+  : c.jal
+  | c.j
+
+c.j: C_J imm
+{
+  pass1_emit_instruction(OP_C_J, IF_CJ, 0, 0, 0, $2, NULL, RELOC_NONE, yylineno);
+}
+;
+c.j: C_J IDENTIFIER
+{
+  pass1_emit_instruction(OP_C_J, IF_CJ, 0, 0, 0, 0,  $2, RELOC_JTGT, yylineno);
+  free($2);
+}
+;
+c.jal: C_JAL imm
+{
+  pass1_emit_instruction(OP_C_JAL, IF_CJ, 0, 0, 0, $2, NULL, RELOC_NONE, yylineno);
+}
+;
+c.jal: C_JAL IDENTIFIER
+{
+  pass1_emit_instruction(OP_C_JAL, IF_CJ, 0, 0, 0, 0,  $2, RELOC_JTGT, yylineno);
+  free($2);
+}
+;
+
+css_type
+   : c.swsp
+   | c.sdsp
+
+c.swsp: C_SWSP REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_SWSP, IF_CSS, 0, 2, $2, $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.sdsp: C_SDSP REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_SDSP, IF_CSS, 0, 2, $2, $4, NULL, RELOC_NONE, yylineno);
 }
 ;
 

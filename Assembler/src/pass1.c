@@ -24,8 +24,11 @@ void pass1_emit_instruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2,
   uint32_t addr = pass_current_pc();
   uint32_t size = 4;
 
+  if (fmt == IF_CR || fmt == IF_CI || fmt == IF_CL || fmt == IF_CS || fmt == IF_CSS || 
+      fmt ==  IF_CB || fmt == IF_CJ || fmt == IF_CA) size = 2;
+
   ir_append_instr(op, fmt, rd, rs1, rs2, imm, label, reloc, sect, addr, size, lineno);
-  pass_advance_pc(4);
+  pass_advance_pc(size);
 }
 
 // Emits an alignment directive and advances the program counter by the padding

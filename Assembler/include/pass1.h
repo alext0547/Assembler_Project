@@ -9,6 +9,8 @@ void pass1_initialize(void);
 void pass1_finalize(void);
 void pass1_emit_instruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int64_t imm,
                             const char* label, reloc_kind_t reloc, int lineno);
+void pass1_emit_cinstruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int64_t imm,
+                             const char* label, reloc_kind_t reloc, int lineno);
 void pass1_emit_label(char* label);
 void pass1_emit_align(uint32_t pow2, int lineno);
 void pass1_emit_data(int64_t word, uint32_t size, int lineno);

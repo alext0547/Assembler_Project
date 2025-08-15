@@ -20,6 +20,8 @@ int pass_was_text_entered(void);
 void pass_set_arch(int len, bool hasM);
 int pass_get_xlen(void);
 bool pass_has_M(void);
+void pass_set_ext_C(bool enabled);
+bool pass_has_C(void);
 
 // Computes the next address aligned to 2^pow2
 // Returns the newly aligned address

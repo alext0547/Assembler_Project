@@ -5,17 +5,12 @@
 #include <stdbool.h>
 #include <inttypes.h>
 #include <limits.h>
+#define C_ANY 0xFF
 
 #include "pass.h"
 #include "ir.h"
 #include "symtab.h"
 #include "pass2.h"
-
-typedef struct {
-  uint8_t opcode;
-  uint8_t funct3;
-  uint8_t funct7;
-} encoding_info_t;
 
 static const encoding_info_t encoding_table[] = {
   [OP_ADD] = { 0x33, 0, 0 },
@@ -84,6 +79,38 @@ static const encoding_info_t encoding_table[] = {
   [OP_JAL] = { 0x6F, 0, 0 }
 };
 
+static const c_encoding_info_t c_encoding_table[] = {
+  [OP_C_SUB]  = { IF_CA, 0x1, 0x4, 0x1, 0x3, 0x0, C_RV_ANY, 1 },
+  [OP_C_XOR]  = { IF_CA, 0x1, 0x4, 0x1, 0x3, 0x1, C_RV_ANY, 1 },
+  [OP_C_OR]   = { IF_CA, 0x1, 0x4, 0x1, 0x3, 0x2, C_RV_ANY, 1 },
+  [OP_C_AND]  = { IF_CA, 0x1, 0x4, 0x1, 0x3, 0x3, C_RV_ANY, 1 },
+  [OP_C_SUBW] = { IF_CA, 0x1, 0x4, 0x1, 0x1, 0x0, C_RV_64, 1 },
+  [OP_C_ADDW] = { IF_CA, 0x1, 0x4, 0x1, 0x1, 0x1, C_RV_64, 1 },
+  [OP_C_ADD]    = { IF_CR, 0x2, 0x4, 0x1, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_JALR]   = { IF_CR, 0x2, 0x4, 0x1, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_EBREAK] = { IF_CR, 0x2, 0x4, 0x1, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_JR]     = { IF_CR, 0x2, 0x4, 0x0, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_MV]     = { IF_CR, 0x2, 0x4, 0x0, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_ADDI]   = { IF_CI, 0x1, 0x0, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 }, 
+  [OP_C_ADDIW]  = { IF_CI, 0x1, 0x1, C_ANY, C_ANY, C_ANY, C_RV_64, 1 },
+  [OP_C_SRLI]   = { IF_CI, 0x1, 0x4, C_ANY, 0x0, C_ANY, C_RV_ANY, 1 },
+  [OP_C_SRAI]   = { IF_CI, 0x1, 0x4, C_ANY, 0x1, C_ANY, C_RV_ANY, 1 },
+  [OP_C_ANDI]   = { IF_CI, 0x1, 0x4, C_ANY, 0x2, C_ANY, C_RV_ANY, 1 },
+  [OP_C_LUI]    = { IF_CI, 0x1, 0x3, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_LWSP]   = { IF_CI,  0x2, 0x2, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_LDSP]   = { IF_CI,  0x2, 0x3, C_ANY, C_ANY, C_ANY, C_RV_64, 1 },
+  [OP_C_LW]     = { IF_CL, 0x0, 0x2, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_LD]     = { IF_CL, 0x0, 0x3, C_ANY, C_ANY, C_ANY, C_RV_64, 1 },
+  [OP_C_SW]     = { IF_CS, 0x0, 0x6, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_SD]     = { IF_CS, 0x0, 0x7, C_ANY, C_ANY, C_ANY, C_RV_64, 1 },
+  [OP_C_BEQZ]   = { IF_CB, 0x1, 0x6, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_BNEZ]   = { IF_CB, 0x1, 0x7, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_JAL]    = { IF_CJ, 0x1, 0x1, C_ANY, C_ANY, C_ANY, C_RV_32, 1 },
+  [OP_C_J]      = { IF_CJ, 0x1, 0x5, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_SWSP]   = { IF_CSS, 0x2, 0x6, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_SDSP]   = { IF_CSS, 0x2, 0x7, C_ANY, C_ANY, C_ANY, C_RV_64, 1 },
+};
+
 static FILE* outfile;
 static int had_error;
 static section_t out_section;
@@ -113,6 +140,40 @@ bool pass2_finalize(void) {
   free_symtab(symtab);
   ir_clear();
   return had_error == 0;
+}
+
+// Builds a 16-bit tag mask for a compressed op from its fixed metadata
+static inline uint16_t c_build_tags(const c_encoding_info_t* i) {
+  uint16_t w = 0;
+
+  w |= ((uint16_t)(i->funct3 & 0x7)) << 13;
+  w |= (uint16_t)(i->quadrant & 0x3);
+
+  if (i->op12 != C_ANY) w |= ((uint16_t)(i->op12 & 0x1)) << 12;
+  if (i->op11_10 != C_ANY) w |= ((uint16_t)(i->op11_10 & 0x3)) << 10;
+  if (i->op6_5 != C_ANY) w |= ((uint16_t)(i->op6_5 & 0x3)) << 5;
+
+  return w;
+}
+
+// Returns true if the given tag fields match the encoding's fixed bits
+static inline bool c_tags_match(const c_encoding_info_t* i, uint8_t q, uint8_t f3, uint8_t b12,
+                                uint8_t b11_10, uint8_t b6_5) {
+  if (i->quadrant != q) return false;
+  if (i->funct3 != f3) return false;
+  if (i->op12 != C_ANY && i->op12 != (b12 & 1)) return false;
+  if (i->op11_10 != C_ANY && i->op11_10 != (b11_10 & 3)) return false;
+  if (i->op6_5 != C_ANY && i->op6_5 != (b6_5 & 3)) return false;
+  return true;
+}
+
+// Error if a compressed instruction is used while C is disabled
+static bool require_C(int lineno) {
+  if (!pass_has_C()) {
+    fprintf(stderr, "Error (line %d): C-extension instruction used but C not enabled\n", lineno);
+    return false;
+  }
+  return true;
 }
 
 // Write exactly n bytes to outfile

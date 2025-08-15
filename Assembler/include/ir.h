@@ -19,7 +19,15 @@ typedef enum {
   IF_S,
   IF_B,
   IF_J,
-  IF_UI
+  IF_UI,
+  IF_CR,
+  IF_CI,
+  IF_CL,
+  IF_CS,
+  IF_CSS,
+  IF_CB,
+  IF_CJ,
+  IF_CA
 } ir_fmt_t;
 
 // Relocation, resolution kind for label based operands
@@ -96,7 +104,36 @@ typedef enum {
   OP_BGE, 
   OP_BLTU, 
   OP_BGEU,
-  OP_JAL
+  OP_JAL,
+  OP_C_ADD,
+  OP_C_SUB,
+  OP_C_XOR,
+  OP_C_OR,
+  OP_C_AND,
+  OP_C_SUBW,
+  OP_C_ADDW,
+  OP_C_JALR,
+  OP_C_EBREAK,
+  OP_C_ADDI,
+  OP_C_ADDIW,
+  OP_C_SRLI,
+  OP_C_SRAI,
+  OP_C_LW,
+  OP_C_LD,
+  OP_C_BEQZ,
+  OP_C_BNEZ,
+  OP_C_JAL,
+  OP_C_SD,
+  OP_C_SW,
+  OP_C_LUI,
+  OP_C_SWSP,
+  OP_C_SDSP,
+  OP_C_LDSP,
+  OP_C_LWSP,
+  OP_C_J,
+  OP_C_JR,
+  OP_C_ANDI,
+  OP_C_MV
 } opcode_t;
 
 typedef struct {
@@ -122,5 +159,7 @@ size_t ir_count(void);
 const ir_entry_t* ir_get(size_t i);
 void ir_dump_summary(size_t max_rows);
 void ir_clear(void);
+void ir_append_cinstr(opcode_t op, int rd, int rs1, int rs2, int64_t imm, const char* label, 
+                      reloc_kind_t rk, section_t sect, uint32_t addr, int lineno);
 
 #endif

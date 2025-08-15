@@ -18,7 +18,13 @@ static const char* const OPCODE_NAMES[] = {
   "AUIPC", "LUI",
   "SW", "SH","SB", "SD",
   "BEQ", "BNE", "BLT", "BGE", "BLTU", "BGEU",
-  "JAL" };
+  "JAL",
+  "C_ADD", "C_SUB", "C_XOR", "C_OR", "C_AND", "C_SUBW", "C_ADDW", "C_JALR",
+  "C_ADDI", "C_ADDW", "C_SRLI", "C_SRAI", "C_LW", "C_LD",
+  "C_BEQZ", "C_BNEZ",
+  "C_JAL",
+  "C_SD", "C_SW",
+  "C_LUI" };
 
 // Bounds check an enum/index into a name table and return "?" if it's out of range
 static inline const char* safe(const char* const* a, size_t n, size_t idx) { return (idx < n) ? a[idx] : "?"; }

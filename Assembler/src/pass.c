@@ -8,6 +8,7 @@ section_t cur_section = SEC_TEXT;
 uint32_t pc_text = 0, pc_data = 0;
 static int xlen = 32;
 static bool extM = false;
+static bool extC = false;
 
 // Returns the current value of the program counter depending on which section the assembler is processing
 uint32_t pass_current_pc(void) {
@@ -69,4 +70,14 @@ int pass_get_xlen(void) {
 // Reports whether the M extension is enabled
 bool pass_has_M(void) {
   return extM;
+}
+
+// Sets the value of the C extension flag
+void pass_set_ext_C(bool enabled) {
+  extC = enabled;
+}
+
+// Reports whether the C extension is enabled
+bool pass_has_C(void) {
+  return extC;
 }
