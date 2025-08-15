@@ -6,18 +6,7 @@
 #include <stdio.h>
 #include "ir.h"
 #include "pass.h"
-
-typedef enum {
-  IF_CR,
-  IF_CI,
-  IF_CIW,
-  IF_CL,
-  IF_CS,
-  IF_CSS,
-  IF_CB,
-  IF_CJ,
-  IF_CA
-} c_fmt_t;
+#define C_ANY 0xFF
 
 typedef enum {
   C_RV_32 = 1,
@@ -26,7 +15,7 @@ typedef enum {
 } c_rv_mask_t;
 
 typedef struct {
-  c_fmt_t fmt;
+  ir_fmt_t fmt;
   uint8_t quadrant;
   uint8_t funct3;
   uint8_t op12;

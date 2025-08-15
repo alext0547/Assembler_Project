@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <inttypes.h>
 #include <limits.h>
-#define C_ANY 0xFF
 
 #include "pass.h"
 #include "ir.h"
