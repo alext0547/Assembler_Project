@@ -114,7 +114,7 @@ c\.addi              return C_ADDI;
 c\.addiw             return C_ADDIW; 
 c\.srli              return C_SRLI; 
 c\.andi              return C_ANDI; 
-c\.li                return C_LI; 
+c\.li                return C_LI;
 c\.lui               return C_LUI;
 c\.lw                return C_LW; 
 c\.ld                return C_LD; 
@@ -129,6 +129,8 @@ c\.bnez              return C_BNEZ;
 c\.j                 return C_J; 
 c\.jal               return C_JAL; 
 c\.slli              return C_SLLI;
+c\.nop               return C_NOP;
+c\.srai              return C_SRAI;
 
 \.text              return DOT_TEXT;
 \.data              return DOT_DATA;

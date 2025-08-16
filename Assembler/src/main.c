@@ -10,11 +10,11 @@
 #include "ir.h"
 
 extern int yyparse(void);
-extern FILE *yyin;
+extern FILE* yyin;
 
 // Print brief CLI usage message to stderr
 static void usage(const char* prog) {
-  fprintf(stderr, "Usage: %s [-o output.bin] [-m32|-m64] [-m|-mno-m] <input.s>\n", prog);
+  fprintf(stderr, "Usage: %s [-o output.bin] [-m32|-m64] [-m|-mno-m] [-mc|-mno-c] <input.s>\n", prog);
 }
 
 // Allocate and return output filename by replacing input's extension with ".bin"
@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
   const char* out_path = NULL;
   int xlen = 32;
   bool mext = false;
+  bool cext = false;
 
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-o") == 0) {
@@ -58,6 +59,12 @@ int main(int argc, char** argv) {
     }
     else if (strcmp(argv[i], "-mno-m") == 0) {
       mext = false;
+    }
+    else if (strcmp(argv[i], "-mc") == 0) {
+      cext = true;
+    }
+    else if (strcmp(argv[i], "-mno-c") == 0) {
+      cext = false;
     }
     else if (argv[i][0] == '-') {
       usage(argv[0]);
@@ -95,6 +102,7 @@ int main(int argc, char** argv) {
   }
 
   pass_set_arch(xlen, mext);
+  pass_set_ext_C(cext);
   pass1_initialize();
   yyin = in;
   int parse_rc = yyparse();

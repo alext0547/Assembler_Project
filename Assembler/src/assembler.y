@@ -35,7 +35,7 @@ extern int yylineno;
 %token J JAL
 %token AUIPC LUI LA
 %token C_ADD C_SUB C_XOR C_OR C_AND C_SUBW C_ADDW C_MV C_JR C_JALR C_EBREAK C_ADDI C_ADDIW C_SRLI C_ANDI C_LI C_LUI
-%token C_LW C_LD C_SW C_SD C_LWSP C_LDSP C_SWSP C_SDSP C_BEQZ C_BNEZ C_J C_JAL C_SLLI
+%token C_LW C_LD C_SW C_SD C_LWSP C_LDSP C_SWSP C_SDSP C_BEQZ C_BNEZ C_J C_JAL C_SLLI C_NOP C_SRAI
 %token DOT_TEXT DOT_DATA ALIGN
 %token WORD BYTE HALF DWORD ASCII ASCIIZ SPACE
 %type <ll> imm 
@@ -857,6 +857,7 @@ c.mv: C_MV REGISTER COMMA REGISTER
 
 ci_type
   : c.addi
+  | c.nop
   | c.addiw
   | c.srli
   | c.srai
@@ -864,10 +865,22 @@ ci_type
   | c.lui
   | c.lwsp
   | c.ldsp
+  | c.li
+  | c.slli
 
 c.addi: C_ADDI REGISTER COMMA imm
 {
   pass1_emit_instruction(OP_C_ADDI,  IF_CI, $2, $2, 0,  $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.nop: C_NOP
+{
+  pass1_emit_instruction(OP_C_ADDI,  IF_CI, 0, 0, 0, 0, NULL, RELOC_NONE, yylineno);
+}
+;
+c.li: C_LI REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_LI, IF_CI, $2, 0, 0, $4, NULL, RELOC_NONE, yylineno);
 }
 ;
 c.addiw: C_ADDIW REGISTER COMMA imm
@@ -878,6 +891,11 @@ c.addiw: C_ADDIW REGISTER COMMA imm
 c.srli: C_SRLI REGISTER COMMA imm
 {
   pass1_emit_instruction(OP_C_SRLI,  IF_CI, $2, $2, 0,  $4, NULL, RELOC_NONE, yylineno);
+}
+;
+c.slli: C_SLLI REGISTER COMMA imm
+{
+  pass1_emit_instruction(OP_C_SLLI,  IF_CI, $2, $2, 0,  $4, NULL, RELOC_NONE, yylineno);
 }
 ;
 c.srai: C_SRAI REGISTER COMMA imm

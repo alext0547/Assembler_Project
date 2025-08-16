@@ -98,6 +98,8 @@ static const c_encoding_info_t c_encoding_table[] = {
   [OP_C_LUI]    = { IF_CI, 0x1, 0x3, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
   [OP_C_LWSP]   = { IF_CI,  0x2, 0x2, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
   [OP_C_LDSP]   = { IF_CI,  0x2, 0x3, C_ANY, C_ANY, C_ANY, C_RV_64, 1 },
+  [OP_C_SLLI] = { IF_CI, 0x2, 0x0, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
+  [OP_C_LI] = { IF_CI, 0x1, 0x2, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
   [OP_C_LW]     = { IF_CL, 0x0, 0x2, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
   [OP_C_LD]     = { IF_CL, 0x0, 0x3, C_ANY, C_ANY, C_ANY, C_RV_64, 1 },
   [OP_C_SW]     = { IF_CS, 0x0, 0x6, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
@@ -107,7 +109,7 @@ static const c_encoding_info_t c_encoding_table[] = {
   [OP_C_JAL]    = { IF_CJ, 0x1, 0x1, C_ANY, C_ANY, C_ANY, C_RV_32, 1 },
   [OP_C_J]      = { IF_CJ, 0x1, 0x5, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
   [OP_C_SWSP]   = { IF_CSS, 0x2, 0x6, C_ANY, C_ANY, C_ANY, C_RV_ANY, 1 },
-  [OP_C_SDSP]   = { IF_CSS, 0x2, 0x7, C_ANY, C_ANY, C_ANY, C_RV_64, 1 },
+  [OP_C_SDSP]   = { IF_CSS, 0x2, 0x7, C_ANY, C_ANY, C_ANY, C_RV_64, 1 }
 };
 
 static FILE* outfile;
@@ -155,6 +157,19 @@ static inline uint16_t c_build_tags(const c_encoding_info_t* i) {
   return w;
 }
 
+// Returns 0-7 for x8-x15 registers for compressed instructions
+static inline int c_regp(int x) {
+  if (x < 8 || x > 15) return -1;
+  return x - 8;
+}
+
+// Returns true if the instruction format is of compressed type
+static inline bool is_c_fmt(ir_fmt_t fmt) {
+  if (fmt == IF_CR || fmt == IF_CI || fmt == IF_CL || fmt == IF_CS || fmt == IF_CSS || fmt == IF_CJ
+      || fmt == IF_CB || fmt == IF_CA) return true;
+  return false;
+}
+
 // Returns true if the given tag fields match the encoding's fixed bits
 static inline bool c_tags_match(const c_encoding_info_t* i, uint8_t q, uint8_t f3, uint8_t b12,
                                 uint8_t b11_10, uint8_t b6_5) {
@@ -172,6 +187,26 @@ static bool require_C(int lineno) {
     fprintf(stderr, "Error (line %d): C-extension instruction used but C not enabled\n", lineno);
     return false;
   }
+  return true;
+}
+
+// Ensures the C extension is enabled and the compressed op is valid for this xlen
+static bool require_c_for_op(opcode_t op, int lineno) {
+  if (!require_C(lineno)) return false;
+
+  const c_encoding_info_t* ci = &c_encoding_table[op];
+  if (!ci->needs_c) {
+    fprintf(stderr, "Internal error (line %d): opcode %d has no c-encoding table entry\n", lineno, (int)op);
+    return false;
+  }
+
+  int xlen = pass_get_xlen();
+  c_rv_mask_t have = (xlen == 64) ? C_RV_64 : C_RV_32;
+  if ((ci->rv_req & have) == 0) {
+    fprintf(stderr, "Error (line %d): compressed instruction not available for RV%d\n", lineno, xlen);
+    return false;
+  }
+
   return true;
 }
 
@@ -215,6 +250,15 @@ static bool require_M(int lineno) {
     return false;
   }
   return true;
+}
+
+// Set bits [hi:lo] of w to v
+static inline uint16_t put(uint16_t w, int hi, int lo, uint32_t v) {
+  if (hi < lo || hi > 15 || lo < 0) return w;
+  uint32_t width = (uint32_t)(hi - lo + 1);
+  uint32_t mask = ((1u << width) - 1u) << lo;
+  uint32_t vbits = (v & ((1u << width) - 1u)) << lo;
+  return (uint16_t)(((uint32_t)w & ~mask) | vbits);
 }
 
 // Ensures the correct xlen and M extension flag is set based on the instruction opcode
@@ -265,6 +309,14 @@ static bool write_value_le(int64_t value, uint32_t size) {
   return write_bytes(b, size);
 }
 
+// Encode a 16-bit half word in little endian and write it
+static bool write_half_le(uint16_t h) {
+  unsigned char b[2];
+  b[0] = (unsigned char)(h & 0xFF);
+  b[1] = (unsigned char)((h >> 8) & 0xFF);
+  return write_bytes(b, 2);
+}
+
 // Encode a 32-bit word in little endian and write it
 static bool write_word_le(uint32_t word) {
   unsigned char b[4];
@@ -303,6 +355,467 @@ static int32_t resolve_label(const char* label, reloc_kind_t reloc, uint32_t add
       return pc_offset;
     default:
       return (int32_t)t;
+  }
+}
+
+// Pack a CR-type instruction into a 16 bit halfword
+static bool encode_crtype(opcode_t op, int rd, int rs1, int rs2, int lineno, uint16_t* out) {
+  if (!require_c_for_op(op, lineno)) { had_error = 1; return false; }
+
+  if (op == OP_C_MV && (rd == 0 || rs2 == 0 || rs1  != 0)) {
+    fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n", 
+            lineno, rd, rs1, rs2);
+    had_error = 1;
+    return false;
+  } 
+  else if (op == OP_C_ADD && (rd == 0 || rs2 == 0 || rs1  != rd)) {
+    fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n", 
+            lineno, rd, rs1, rs2);
+    had_error = 1;
+    return false;
+  }
+  else if ((op == OP_C_JR || op == OP_C_JALR) && (rs1 == 0 || rd != 0 || rs2 != 0)) {
+    fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n", 
+            lineno, rd, rs1, rs2);
+    had_error = 1;
+    return false;
+  }
+  else if (op == OP_C_EBREAK && (rd != 0 || rs2 != 0 || rs1 != 0)) {
+    fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n", 
+            lineno, rd, rs1, rs2);
+    had_error = 1;
+    return false;
+  }
+
+  if (op == OP_C_JR || op == OP_C_JALR) rd = rs1;
+
+  const c_encoding_info_t* info = &c_encoding_table[op];
+
+  *out = ((uint16_t)(info->funct3 & 0x7) << 13) |
+         ((uint16_t)(info->op12 & 0x1) << 12) |
+         ((uint16_t)(rd & 0x1F) << 7) |
+         ((uint16_t)(rs2 & 0x1F) << 2) |
+         ((uint16_t)(info->quadrant & 0x3));
+  return true;
+}
+
+// Pack a CA-type instruction into a 16 bit halfword
+static bool encode_catype(opcode_t op, int rd, int rs1, int rs2, int lineno, uint16_t* out) {
+  if (!require_c_for_op(op, lineno)) { had_error = 1; return false; }
+
+  rd = c_regp(rd);
+  rs1 = c_regp(rs1);
+  rs2 = c_regp(rs2);
+  if (rd == -1 || rs1 == -1 || rs2 == -1 || rd != rs1) {
+    fprintf(stderr, "Error: (line %d): Invalid register(s) rd (x%d), rs1 (x%d), rs2 (x%d)", 
+            lineno, rd, rs1, rs2);
+    had_error = 1;
+    return false;
+  }
+
+  const c_encoding_info_t* info = &c_encoding_table[op];
+
+  *out = ((uint16_t)(info->funct3 & 0x7) << 13) |
+         ((uint16_t)(info->op12 & 0x1) << 12) |
+         ((uint16_t)(info->op11_10 & 0x3) << 10) |
+         ((uint16_t)(rd & 0x7) << 7) |
+         ((uint16_t)(info->op6_5 & 0x3) << 5) |
+         ((uint16_t)(rs2 & 0x7) << 2) |
+         ((uint16_t)(info->quadrant & 0x3));
+  return true;
+}
+
+// CI imm helper
+static inline void put_imm5_0_ci(uint16_t* w, uint32_t u6) {
+  *w = put(*w, 12, 12, (u6 >> 5) & 0x1);
+  *w = put(*w, 6, 2, u6 & 0x1F);
+}
+
+// Pack a CI-type instruction into a 16 bit halfword
+static bool encode_citype(opcode_t op, int rd, int rs1, int64_t imm, int lineno, uint16_t* out) {
+  (void)rs1;
+
+  if (!require_c_for_op(op, lineno)) { had_error = 1; return false; }
+
+  const c_encoding_info_t* info = &c_encoding_table[op];
+  const int xlen = pass_get_xlen();
+  uint16_t w = c_build_tags(info);
+
+  switch (op) {
+    case OP_C_ADDI: {
+      if (rd == 0 && imm == 0) {
+        w = put(w, 11, 7, 0u);
+        put_imm5_0_ci(&w, 0u);
+        *out = w;
+        return true;
+      }
+      if (rd == 0) {
+        fprintf(stderr, "Error (line %d): c.addi rd cannot be x0 unless imm==0 (c.nop).\n", lineno);
+        had_error = 1; return false;
+      }
+      if (imm < -32 || imm > 31) {
+        fprintf(stderr, "Error (line %d): c.addi imm out of range (-32..31): %" PRId64 "\n", lineno, imm);
+        had_error = 1; return false;
+      }
+      w = put(w, 11, 7, (uint32_t)(rd & 0x1F));
+      put_imm5_0_ci(&w, (uint32_t)(imm & 0x3F));
+      *out = w; return true;
+    }
+
+    case OP_C_ADDIW: {
+      if (xlen != 64) { fprintf(stderr, "Error (line %d): c.addiw requires RV64.\n", lineno); had_error = 1; return false; }
+      if (rd == 0) { fprintf(stderr, "Error (line %d): c.addiw rd cannot be x0.\n", lineno); had_error = 1; return false; }
+      if (imm < -32 || imm > 31) { fprintf(stderr, "Error (line %d): c.addiw imm out of range (-32..31): %" PRId64 "\n", lineno, imm); had_error = 1; return false; }
+      w = put(w, 11, 7, (uint32_t)(rd & 0x1F));
+      put_imm5_0_ci(&w, (uint32_t)(imm & 0x3F));
+      *out = w; return true;
+    }
+
+    case OP_C_LUI: {
+      if (rd == 0 || rd == 2) { fprintf(stderr, "Error (line %d): c.lui rd cannot be x0 or x2.\n", lineno); had_error = 1; return false; }
+      if (imm == 0 || imm < -32 || imm > 31) { fprintf(stderr, "Error (line %d): c.lui imm must be in [-32..-1] or [1..31].\n", lineno); had_error = 1; return false; }
+      w = put(w, 11, 7, (uint32_t)(rd & 0x1F));
+      put_imm5_0_ci(&w, (uint32_t)(imm & 0x3F));
+      *out = w; return true;
+    }
+
+    case OP_C_SLLI: {
+      if (rd == 0) { fprintf(stderr, "Error (line %d): c.slli rd cannot be x0.\n", lineno); had_error = 1; return false; }
+      const uint32_t max_sh = (xlen == 64) ? 63u : 31u;
+      if (imm < 0 || (uint64_t)imm > max_sh) {
+        fprintf(stderr, "Error (line %d): c.slli shamt out of range (0..%u): %" PRId64 "\n", lineno, max_sh, imm);
+        had_error = 1; return false;
+      }
+      w = put(w, 11, 7, (uint32_t)(rd & 0x1F));
+      put_imm5_0_ci(&w, (uint32_t)imm & 0x3Fu);
+      *out = w; return true;
+    }
+
+    case OP_C_SRLI:
+    case OP_C_SRAI: {
+      const int rp = c_regp(rd);
+      if (rp < 0) { fprintf(stderr, "Error (line %d): %s requires rd in x8..x15.\n", lineno, (op == OP_C_SRLI) ? "c.srli" : "c.srai"); had_error = 1; return false; }
+      const uint32_t max_sh = (xlen == 64) ? 63u : 31u;
+      if (imm < 0 || (uint64_t)imm > max_sh) {
+        fprintf(stderr, "Error (line %d): %s shamt out of range (0..%u): %" PRId64 "\n",
+                lineno, (op == OP_C_SRLI) ? "c.srli" : "c.srai", max_sh, imm);
+        had_error = 1; 
+        return false;
+      }
+      w = put(w, 9, 7, (uint32_t)(rp & 0x7));
+      put_imm5_0_ci(&w, (uint32_t)imm & 0x3Fu);
+      *out = w; 
+      return true;
+    }
+
+    case OP_C_ANDI: {
+      const int rp = c_regp(rd);
+      if (rp < 0) { fprintf(stderr, "Error (line %d): c.andi requires rd in x8..x15.\n", lineno); had_error = 1; return false; }
+      if (imm < -32 || imm > 31) { fprintf(stderr, "Error (line %d): c.andi imm out of range (-32..31): %" PRId64 "\n", lineno, imm); had_error = 1; return false; }
+      w = put(w, 9, 7, (uint32_t)(rp & 0x7));
+      put_imm5_0_ci(&w, (uint32_t)(imm & 0x3F));
+      *out = w; 
+      return true;
+    }
+
+    case OP_C_LWSP: {
+      if (rs1 != 2) { 
+        fprintf(stderr, "Error (line %d): c.lwsp base must be x2 (sp), got x%d\n", lineno, rs1);
+        had_error = 1; return false;
+      }
+      if (rd == 0) {
+        fprintf(stderr, "Error (line %d): c.lwsp rd cannot be x0\n", lineno);
+        had_error = 1; return false;
+      }
+      if (imm < 0 || (imm & 0x3) != 0 || imm > 252) {
+        fprintf(stderr, "Error (line %d): c.lwsp offset must be 0..252 and multiple of 4 (got %" PRId64 ")\n",
+                lineno, imm);
+        had_error = 1; return false;
+      }
+
+      uint32_t u = (uint32_t)imm;
+      w = put(w, 11, 7, (uint32_t)(rd & 0x1F));
+      w = put(w, 12, 12, (u >> 5) & 0x1);
+      w = put(w, 6,  4,  (u >> 2) & 0x7); 
+      w = put(w, 3,  2,  (u >> 6) & 0x3);
+      *out = w;
+      return true;
+    }
+
+    case OP_C_LDSP: {
+      // RV64 only, base must be sp (x2), rd != x0, uimm 0..504 and multiple of 8
+      if (pass_get_xlen() != 64) {
+        fprintf(stderr, "Error (line %d): c.ldsp requires RV64\n", lineno);
+        had_error = 1; return false;
+      }
+      if (rs1 != 2) { 
+        fprintf(stderr, "Error (line %d): c.ldsp base must be x2 (sp), got x%d\n", lineno, rs1);
+        had_error = 1; return false;
+      }
+      if (rd == 0) {
+        fprintf(stderr, "Error (line %d): c.ldsp rd cannot be x0\n", lineno);
+        had_error = 1; return false;
+      }
+      if (imm < 0 || (imm & 0x7) != 0 || imm > 504) {
+        fprintf(stderr, "Error (line %d): c.ldsp offset must be 0..504 and multiple of 8 (got %" PRId64 ")\n",
+                lineno, imm);
+        had_error = 1; return false;
+      }
+      uint32_t u = (uint32_t)imm;
+      w = put(w, 12, 12, (u >> 5) & 0x1);
+      w = put(w,  6,  5, (u >> 3) & 0x3);
+      w = put(w,  4,  2, (u >> 6) & 0x7);
+      *out = w;
+      return true;
+    }
+
+    case OP_C_LI: {
+      if (rd == 0) {
+        fprintf(stderr, "Error (line %d): c.li rd cannot be x0.\n", lineno);
+        had_error = 1; return false;
+      }
+      if (imm < -32 || imm > 31 || imm == 0) {
+        fprintf(stderr, "Error (line %d): c.li imm must be in [-32..-1] or [1..31], got %" PRId64 "\n", lineno, imm);
+        had_error = 1; return false;
+      }
+      w = put(w, 11, 7, (uint32_t)(rd & 0x1F));
+      put_imm5_0_ci(&w, (uint32_t)(imm & 0x3F));
+      *out = w;
+      return true;
+    }
+
+    default:
+      fprintf(stderr, "Error (line %d): encode_citype(): unhandled CI op.\n", lineno);
+      had_error = 1; 
+      return false;
+  }
+}
+
+// Pack a CL-type instruction into a 16 bit halfword
+static bool encode_cltype(opcode_t op, int rd, int rs1, int64_t imm, int lineno, uint16_t* out) {
+  if (!require_c_for_op(op, lineno)) { had_error = 1; return false; }
+
+  int rd_orig = rd, rs1_orig = rs1;
+  int rdp = c_regp(rd), r1p = c_regp(rs1);
+  if (rdp < 0 || r1p < 0) {
+    fprintf(stderr, "Error (line %d): CL requires rd, rs1 in x8..x15 (got x%d, x%d)\n",
+            lineno, rd_orig, rs1_orig);
+    had_error = 1; 
+    return false;
+  }
+
+  const c_encoding_info_t* info = &c_encoding_table[op];
+  uint16_t w = c_build_tags(info);
+  uint32_t u = (uint32_t)imm;
+
+  if (op == OP_C_LW) {
+    if (imm < 0 || (u & 0x3) != 0 || u > 124) {
+      fprintf(stderr, "Error (line %d): c.lw offset must be 0..124 and multiple of 4 (got %" PRId64 ")\n",
+              lineno, imm);
+      had_error = 1; 
+      return false;
+    }
+    w = put(w, 12, 10, (u >> 3) & 0x7);
+    w = put(w, 6,  6,  (u >> 2) & 0x1);
+    w = put(w, 5,  5,  (u >> 6) & 0x1);
+  } else if (op == OP_C_LD) {
+    if (imm < 0 || (u & 0x7) != 0 || u > 248) {
+      fprintf(stderr, "Error (line %d): c.ld offset must be 0..248 and multiple of 8 (got %" PRId64 ")\n",
+              lineno, imm);
+      had_error = 1; 
+      return false;
+    }
+    w = put(w, 12, 10, (u >> 3) & 0x7);
+    w = put(w, 6,  5,  (u >> 6) & 0x3);
+  } else {
+    fprintf(stderr, "Error (line %d): encode_cltype only handles C.LW/C.LD\n", lineno);
+    had_error = 1; 
+    return false;
+  }
+
+  w = put(w, 9, 7, (uint32_t)r1p & 0x7);
+  w = put(w, 4, 2, (uint32_t)rdp & 0x7);
+
+  *out = w;
+  return true;
+}
+
+// Pack a CS-type instruction into a 16 bit halfword
+static bool encode_cstype(opcode_t op, int rs1, int rs2, int64_t imm, int lineno, uint16_t* out) {
+  if (!require_c_for_op(op, lineno)) { had_error = 1; return false; }
+
+  int rs1_orig = rs1, rs2_orig = rs2;
+  int r2p = c_regp(rs2), r1p = c_regp(rs1);
+  if (r1p < 0 || r2p < 0) {
+    fprintf(stderr, "Error (line %d): CS requires rs1, rs2 in x8..x15 (got x%d, x%d)\n",
+            lineno, rs1_orig, rs2_orig);
+    had_error = 1; 
+    return false;
+  }
+
+  const c_encoding_info_t* info = &c_encoding_table[op];
+  uint16_t w = c_build_tags(info);
+  uint32_t u = (uint32_t)imm;
+
+  if (op == OP_C_SW) {
+    if (imm < 0 || (u & 0x3) != 0 || u > 124) {
+      fprintf(stderr, "Error (line %d): c.sw offset must be 0..124 and multiple of 4 (got %" PRId64 ")\n",
+              lineno, imm);
+      had_error = 1; 
+      return false;
+    }
+    w = put(w, 12, 10, (u >> 3) & 0x7);
+    w = put(w, 6,  6,  (u >> 2) & 0x1);
+    w = put(w, 5,  5,  (u >> 6) & 0x1);
+  } else if (op == OP_C_SD) {
+    if (imm < 0 || (u & 0x7) != 0 || u > 248) {
+      fprintf(stderr, "Error (line %d): c.sd offset must be 0..248 and multiple of 8 (got %" PRId64 ")\n",
+              lineno, imm);
+      had_error = 1; 
+      return false;
+    }
+    w = put(w, 12, 10, (u >> 3) & 0x7);
+    w = put(w, 6,  5,  (u >> 6) & 0x3);
+  } else {
+    fprintf(stderr, "Error (line %d): encode_cstype only handles C.SW/C.SD\n", lineno);
+    had_error = 1; 
+    return false;
+  }
+
+  w = put(w, 9, 7, (uint32_t)r1p & 0x7);
+  w = put(w, 4, 2, (uint32_t)r2p & 0x7);
+
+  *out = w;
+  return true;
+}
+
+// Pack a CSS-type instruction into a 16 bit halfword
+static bool encode_csstype(opcode_t op, int rs1, int rs2, int64_t imm, int lineno, uint16_t* out) {
+  if (!require_c_for_op(op, lineno)) { had_error = 1; return false; }
+  if (rs1 != 2) {
+    fprintf(stderr, "Error (line %d): CSS base must be x2 (sp), got x%d\n", lineno, rs1);
+    had_error = 1; 
+    return false;
+  }
+
+  const c_encoding_info_t* info = &c_encoding_table[op];
+  uint16_t w = c_build_tags(info);
+  uint32_t u = (uint32_t)imm;
+
+  if (op == OP_C_SWSP) {
+    if (imm < 0 || (u & 0x3) != 0 || u > 252) {
+      fprintf(stderr, "Error (line %d): c.swsp offset must be 0..252 and multiple of 4 (got %" PRId64 ")\n", lineno, imm);
+      had_error = 1; return false;
+    }
+    w = put(w, 12, 12, (u >> 7) & 0x1);
+    w = put(w,  6,  2, (u >> 2) & 0x1F);
+    w = put(w, 11,  7, (uint32_t)(rs2 & 0x1F));
+  } else if (op == OP_C_SDSP) {
+    if (imm < 0 || (u & 0x7) != 0 || u > 504) {
+      fprintf(stderr, "Error (line %d): c.sdsp offset must be 0..504 and multiple of 8 (got %" PRId64 ")\n", lineno, imm);
+      had_error = 1; return false;
+    }
+    w = put(w, 12, 10, (u >> 6) & 0x7);
+    w = put(w,  6,  2, (u >> 3) & 0x1F);
+    w = put(w, 11,  7, (uint32_t)(rs2 & 0x1F));
+  } else {
+    fprintf(stderr, "Error (line %d): encode_csstype only handles C.SWSP/C.SDSP\n", lineno);
+    had_error = 1; return false;
+  }
+
+  *out = w;
+  return true;
+}
+
+// Pack a CB-type instruction into a 16 bit halfword
+static bool encode_cbtype(opcode_t op, int rs1, int rs2, int64_t imm, int lineno, uint16_t* out) {
+  if (!require_c_for_op(op, lineno)) { had_error = 1; return false; }
+
+  (void)rs2;
+  int r1p = c_regp(rs1);
+  if (r1p < 0) {
+    fprintf(stderr, "Error (line %d): %s requires rs1 in x8..x15 (got x%d)\n",
+            lineno, (op == OP_C_BEQZ ? "c.beqz" : "c.bnez"), rs1);
+    had_error = 1; 
+    return false;
+  }
+
+  if ((imm & 1) != 0 || imm < -256 || imm > 254) {
+    fprintf(stderr, "Error (line %d): CB offset must be even and in [-256, 254], got %" PRId64 "\n",
+            lineno, imm);
+    had_error = 1; 
+    return false;
+  }
+
+  const c_encoding_info_t* info = &c_encoding_table[op];
+  uint16_t w = c_build_tags(info);
+  int32_t off = (int32_t)imm >> 1;
+  uint32_t u = (uint32_t)(off & 0xFF);
+
+  w = put(w, 12, 12, (u >> 7) & 0x1);
+  w = put(w, 11, 10, (u >> 5) & 0x3);
+  w = put(w, 9, 7, (uint32_t)r1p & 0x7);
+  w = put(w, 6, 3, u & 0xF);
+  w = put(w, 2, 2, (u >> 4) & 0x1);
+
+  *out = w;
+  return true;
+}
+
+// Pack a CJ-type instruction into a 16 bit halfword
+static bool encode_cjtype(opcode_t op, int rs1, int rs2, int64_t imm, int lineno, uint16_t* out) {
+  if (!require_c_for_op(op, lineno)) { had_error = 1; return false; }
+
+  (void)rs1; (void)rs2;
+  if ((imm & 1) != 0 || imm < -2048 || imm > 2046) {
+    fprintf(stderr, "Error (line %d): CJ offset must be even and in [-2048, 2046], got %" PRId64 "\n",
+            lineno, imm);
+    had_error = 1; 
+    return false;
+  }
+
+  const c_encoding_info_t* info = &c_encoding_table[op];
+  uint16_t w = c_build_tags(info);
+  uint32_t off = (int32_t)imm >> 1;
+  uint32_t u = (uint32_t)(off & 0x7FF);
+
+  w = put(w, 12, 12, (u >> 10) & 0x1);
+  w = put(w, 11, 11, (u >>  3) & 0x1);
+  w = put(w, 10,  9, (u >>  8) & 0x3);
+  w = put(w,  8,  8, (u >>  9) & 0x1);
+  w = put(w,  7,  7, (u >>  6) & 0x1);
+  w = put(w,  6,  6, (u >>  7) & 0x1);
+  w = put(w,  5,  3, (u >>  1) & 0x7);
+  w = put(w,  2,  2, (u >>  5) & 0x1);
+
+  *out = w;
+  return true;
+}
+
+// Dispatches to the correct RV16I encoder for the given format
+static bool c_encode_instruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int64_t imm, 
+                                   int lineno, uint16_t* out) {
+  switch (fmt) {
+    case IF_CA:
+      return encode_catype(op, rd, rs1, rs2, lineno, out);
+    case IF_CI:
+      return encode_citype(op, rd, rs1, imm, lineno, out);
+    case IF_CR:
+      return encode_crtype(op, rd, rs1, rs2, lineno, out);
+    case IF_CS:
+      return encode_cstype(op, rs1, rs2, imm, lineno, out);
+    case IF_CSS: 
+      return encode_csstype(op, rs1, rs2, imm, lineno, out);
+    case IF_CB:
+      return encode_cbtype(op, rs1, rs2, imm, lineno, out);
+    case IF_CJ:
+      return encode_cjtype(op, rs1, rs2, imm, lineno, out);
+    case IF_CL:
+      return encode_cltype(op, rd, rs1, imm, lineno, out);
+    default:
+      fprintf(stderr, "Error (line %d): Unknown C format\n", lineno);
+      had_error = 1;
+      return false;
   }
 }
 
@@ -507,7 +1020,7 @@ static bool encode_instruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int r
   }
 }
 
-// Resolves any symbolic relocation, encodes the isntruction, and writes the resulting 32-bit word to the output stream
+// Resolves any symbolic relocation, encodes the instruction, and writes the resulting 32-bit word to the output stream
 bool pass2_emit_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2,
                       int64_t imm, const char* label, reloc_kind_t reloc,
                       uint32_t addr, int lineno) {
@@ -516,6 +1029,25 @@ bool pass2_emit_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2,
     fprintf(stderr, "Error: no output file set before emitting instruction (line %d)\n", lineno);
     had_error = 1;
     return false;
+  }
+
+  if (is_c_fmt(fmt)) {
+    if (!require_c_for_op(op, lineno)) return false;
+
+    int64_t use_imm = imm;
+    if (label && reloc != RELOC_NONE) {
+      use_imm = resolve_label(label, reloc, addr, lineno);
+      if (had_error) return false;
+    }
+    else if (label && reloc == RELOC_NONE) {
+      fprintf(stderr, "Error: (line %d): label provided without relocation kind\n", lineno);
+      had_error = 1;
+      return false;
+    }
+    
+    uint16_t half = 0;
+    if (!c_encode_instruction(op, fmt, rd, rs1, rs2, use_imm, lineno, &half)) return false;
+    return write_half_le(half);
   }
 
   if (!require_for_op(op, lineno)) {

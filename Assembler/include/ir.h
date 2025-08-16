@@ -118,6 +118,7 @@ typedef enum {
   OP_C_ADDIW,
   OP_C_SRLI,
   OP_C_SRAI,
+  OP_C_SLLI,
   OP_C_LW,
   OP_C_LD,
   OP_C_BEQZ,
@@ -133,7 +134,8 @@ typedef enum {
   OP_C_J,
   OP_C_JR,
   OP_C_ANDI,
-  OP_C_MV
+  OP_C_MV,
+  OP_C_LI
 } opcode_t;
 
 typedef struct {
