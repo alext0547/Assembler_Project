@@ -137,6 +137,9 @@ void ir_append_data(section_t sect, uint32_t addr, int64_t word, uint32_t size, 
   e.line = line;
   e.imm = word;
   e.reloc = RELOC_NONE;
+  e.forced_size = IR_SIZE_AUTO;
+  e.can_compress = false;
+  e.has_c_choice = false;
 
   buf[len++] = e;
 }
@@ -192,4 +195,46 @@ void ir_clear(void) {
   free(buf);
   buf = NULL;
   len = cap = 0;
+}
+
+// Mark a node as explicitly compressed
+void ir_mark_explicit_compressed(ir_entry_t* instr) {
+  if (!instr) return;
+  instr->forced_size = IR_SIZE_2;
+  instr->can_compress = false;
+  instr->has_c_choice = false;
+}
+
+// Hint that a node must remain 32-bit
+void ir_force_32(ir_entry_t* instr) {
+  if (!instr) return;
+  instr->forced_size = IR_SIZE_4;
+  instr->can_compress = false;
+  instr->has_c_choice = false;
+}
+
+// Allow the node to be auto sized
+void ir_force_auto(ir_entry_t* instr) {
+  if (!instr) return;
+  instr->forced_size = IR_SIZE_AUTO;
+  instr->can_compress = true;
+}
+
+// Set a selected compressed replacement choice
+void ir_set_c_choice(ir_entry_t* instr, const struct c_choice* ch) {
+  if (!instr || !ch) return;
+  instr->choice = *ch;
+  instr->has_c_choice = true;
+}
+
+// Returns the currently chosen size for layout
+uint8_t ir_get_forced_size(const ir_entry_t* instr) {
+  if (!instr) return IR_SIZE_AUTO;
+  return (uint8_t)instr->forced_size;
+}
+
+// Returns true if this node originated from a c. mnemonic
+bool ir_is_explicit_c(const ir_entry_t* instr) {
+  if (!instr) return false;
+  return (instr->forced_size == IR_SIZE_2) && !instr->can_compress && !instr->has_c_choice;
 }

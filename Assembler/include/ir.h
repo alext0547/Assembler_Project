@@ -150,6 +150,11 @@ typedef struct {
   uint32_t addr;
   uint32_t size;
   int line;
+  bool can_compress;
+  enum { IR_SIZE_AUTO, IR_SIZE_2, IR_SIZE_4 } forced_size;
+  bool has_c_choice;
+  struct c_choice { opcode_t op; ir_fmt_t fmt; int rd, rs1, rs2; int64_t imm; const char* label;
+                    reloc_kind_t reloc; } choice;
 } ir_entry_t;
 
 void ir_init(void);
@@ -161,7 +166,11 @@ size_t ir_count(void);
 const ir_entry_t* ir_get(size_t i);
 void ir_dump_summary(size_t max_rows);
 void ir_clear(void);
-void ir_append_cinstr(opcode_t op, int rd, int rs1, int rs2, int64_t imm, const char* label, 
-                      reloc_kind_t rk, section_t sect, uint32_t addr, int lineno);
+void ir_mark_explicit_compressed(ir_entry_t* instr);
+void ir_force_32(ir_entry_t* instr);
+void ir_force_auto(ir_entry_t* instr);
+void ir_set_c_choice(ir_entry_t* instr, const struct c_choice* ch);
+uint8_t ir_get_forced_size(const ir_entry_t* instr);
+bool ir_is_explicit_c(const ir_entry_t* instr);
 
 #endif

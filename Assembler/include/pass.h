@@ -22,6 +22,8 @@ int pass_get_xlen(void);
 bool pass_has_M(void);
 void pass_set_ext_C(bool enabled);
 bool pass_has_C(void);
+bool pass_has_auto_compress(void);
+void pass_set_auto_compress(bool enabled);
 
 // Computes the next address aligned to 2^pow2
 // Returns the newly aligned address

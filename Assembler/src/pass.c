@@ -9,6 +9,7 @@ uint32_t pc_text = 0, pc_data = 0;
 static int xlen = 32;
 static bool extM = false;
 static bool extC = false;
+static bool autoC = false;
 
 // Returns the current value of the program counter depending on which section the assembler is processing
 uint32_t pass_current_pc(void) {
@@ -80,4 +81,14 @@ void pass_set_ext_C(bool enabled) {
 // Reports whether the C extension is enabled
 bool pass_has_C(void) {
   return extC;
+}
+
+// Enable/disable auto compress feature
+void pass_set_auto_compress(bool enabled) {
+  autoC = enabled;
+}
+
+// Returns whether auto compression is enabled
+bool pass_has_auto_compress(void) {
+  return autoC;
 }
