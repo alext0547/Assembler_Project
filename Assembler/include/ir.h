@@ -163,7 +163,7 @@ void ir_append_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int64_
 void ir_append_data(section_t sect, uint32_t addr, int64_t word, uint32_t size, int line);
 void ir_append_align(section_t sect, uint32_t addr_before, uint32_t pad_bytes, int line);
 size_t ir_count(void);
-const ir_entry_t* ir_get(size_t i);
+ir_entry_t* ir_get(size_t i);
 void ir_dump_summary(size_t max_rows);
 void ir_clear(void);
 void ir_mark_explicit_compressed(ir_entry_t* instr);
@@ -172,5 +172,6 @@ void ir_force_auto(ir_entry_t* instr);
 void ir_set_c_choice(ir_entry_t* instr, const struct c_choice* ch);
 uint8_t ir_get_forced_size(const ir_entry_t* instr);
 bool ir_is_explicit_c(const ir_entry_t* instr);
+void ir_clear_c_choice(ir_entry_t* instr);
 
 #endif

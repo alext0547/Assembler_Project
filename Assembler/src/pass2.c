@@ -10,6 +10,7 @@
 #include "ir.h"
 #include "symtab.h"
 #include "pass2.h"
+#include "c_rules.h"
 
 static const encoding_info_t encoding_table[] = {
   [OP_ADD] = { 0x33, 0, 0 },
@@ -141,6 +142,213 @@ bool pass2_finalize(void) {
   free_symtab(symtab);
   ir_clear();
   return had_error == 0;
+}
+
+// Current chosen size for instruction entries
+static inline uint32_t pass2_node_size_now(const ir_entry_t* e) {
+  if (ir_is_explicit_c(e)) return 2;
+  if (e->forced_size == IR_SIZE_2) return 2;
+  if (e->forced_size == IR_SIZE_4) return 4;
+  if (e->has_c_choice) return 2;
+  return 4;
+}
+
+// Return true if a compressed choice's displacement fits the encoding's limits
+static bool pass2_choice_range_ok(const struct c_choice* ch, int32_t disp) {
+  if (!ch) return false;
+  switch (ch->op) {
+    case OP_C_BEQZ:
+    case OP_C_BNEZ:
+      return (((disp & 1) == 0) && (disp >= -256) && (disp <= 254));
+    case OP_C_J:
+    case OP_C_JAL:
+      return ((disp & 1) == 0) && (disp >= -2048) && (disp <= 2046);
+    default:
+      return true;
+  }
+}
+
+// Compute signed byte displacement for a branch/jump given from/to addresses
+static inline int32_t pass2_compute_disp(uint32_t from_addr, uint32_t to_addr) {
+  return (int32_t)to_addr - (int32_t)from_addr;
+}
+
+// Look up absolute address of a label without emitting
+static bool pass2_peek_label_addr(const char* label, uint32_t* out_addr) {
+  if (!label || !out_addr) return false;
+  int addr = search_sym(symtab, label);
+  if (addr < 0) return false;
+
+  *out_addr = (uint32_t)addr;
+  return true;
+}
+
+// Validate all chosen C forms that depend on final displacements
+static bool pass2_validate_compressed_ranges(section_t sect) {
+  if (!pass_has_C() || !pass_has_auto_compress()) return false;
+
+  bool changed = false;
+  const size_t n = ir_count();
+  for (size_t i = 0; i < n; i++) {
+    ir_entry_t* e = ir_get(i);
+    if (!e || e->sect != sect) continue;
+    if (!e->has_c_choice) continue;
+
+    const struct c_choice* ch = &e->choice;
+
+    bool needs_pc_rel = false;
+    switch (ch->op) {
+      case OP_C_BEQZ:
+      case OP_C_BNEZ:
+      case OP_C_J:
+      case OP_C_JAL:
+        needs_pc_rel = true;
+        break;
+      default:
+        break;
+    }
+    if (!needs_pc_rel) continue;
+
+    uint32_t to_addr = 0;
+    bool have_target = false;
+
+    if (ch->label && ch->label[0]) {
+      have_target = pass2_peek_label_addr(ch->label, &to_addr);
+    }
+    else if (ch->reloc == RELOC_BOFF || ch->reloc == RELOC_JTGT) {
+      to_addr = (uint32_t)((int32_t)e->addr + (int32_t)ch->imm);
+      have_target = true;
+    }
+    else {
+      continue;
+    }
+
+    if (!have_target) {
+      e->has_c_choice = false;
+      changed = true;
+      continue;
+    }
+
+    const int32_t disp = pass2_compute_disp(e->addr, to_addr);
+    if (!pass2_choice_range_ok(ch, disp)) {
+      e->has_c_choice = false;
+      changed = true;
+    }
+    else {
+      ((struct c_choice*)&e->choice)->imm = disp;
+    }
+  }
+  return changed;
+}
+
+// Assign sequential addresses in a section using current node sizes
+static void pass2_assign_addresses(section_t sect) {
+  uint32_t pc = 0;
+  const size_t n = ir_count();
+  for (size_t i = 0; i < n; i++) {
+    ir_entry_t* e = ir_get(i);
+    if (!e || e->sect != sect) continue;
+
+    switch (e->kind) {
+      case IR_DATA:
+        break;
+      case IR_ALIGN: {
+        uint32_t align = (uint32_t)e->imm;
+        if (align > 1) {
+          uint32_t aligned = (pc + (align - 1)) & ~(align - 1);
+          e->size = aligned - pc;
+          pc = aligned;
+        }
+        else {
+          e->size = 0;
+        }
+        e->addr = pc;
+        continue;
+      }
+      default:
+        e->size = pass2_node_size_now(e);
+        break;
+    }
+    e->addr = pc;
+    pc += e->size;
+  }
+}
+
+// Decide whether a node is eligible to attempt mapping
+static bool pass2_node_can_attempt(const ir_entry_t* e) {
+  if (!e) return false;
+  if (!pass_has_C()) return false;
+  if (!pass_has_auto_compress()) return false;
+  if (e->kind == IR_DATA || e->kind == IR_ALIGN) return false;
+  if (ir_is_explicit_c(e)) return false;
+  if (ir_get_forced_size(e) == IR_SIZE_4) return false;
+  if (!e->can_compress) return false;
+  if (e->reloc != RELOC_NONE && e->reloc != RELOC_BOFF && e->reloc != RELOC_JTGT) return false;
+  if (e->sect != SEC_TEXT) return false;
+  return true;
+}
+
+// Scan IR and attach one compressed candidate per eligible instruction
+static size_t pass2_plan_choices(ir_entry_t* list, size_t n) {
+  if (!pass_has_C() || !pass_has_auto_compress()) return 0;
+  size_t count = 0;
+  for (size_t i = 0; i < n; i++) {
+    ir_entry_t* e = &list[i];
+    if (!pass2_node_can_attempt(e)) continue;
+    
+    struct c_choice ch = (struct c_choice){0};
+    if (c_try_map(e, &ch)) {
+      ir_set_c_choice(e, &ch);
+      ++count;
+    }
+    else {
+      e->has_c_choice = false;
+    }
+  }
+  return count;
+}
+
+// Looks up a symbol and computes the relocation value
+static int32_t resolve_label(const char* label, reloc_kind_t reloc, uint32_t addr, int lineno) {
+  int target = search_sym(symtab, label);
+  if (target < 0) {
+    fprintf(stderr, "Error: (line %d): Undefined label '%s'\n", lineno, label);
+    had_error = 1;
+    return 0;
+  }
+
+  int64_t t = (int64_t)(int32_t)target;
+  int64_t pc = (int64_t)addr;
+  int64_t pc_offset = t - pc;
+
+  switch (reloc) {
+    case RELOC_HI20: {
+      int64_t hi = (pc_offset + 0x800) >> 12;
+      return (int32_t)(hi << 12);
+    }
+    case RELOC_LO12: {
+      int64_t hi = (pc_offset + 0x800) >> 12;
+      int64_t lo = pc_offset - (hi << 12);
+      return (int32_t)lo;
+    }
+    case RELOC_BOFF:
+    case RELOC_JTGT:
+      return pc_offset;
+    default:
+      return (int32_t)t;
+  }
+}
+
+// Recompute addresses and validate chosen compressed forms to a fixed point
+bool pass2_relayout_and_validate(section_t sect, unsigned max_iters) {
+  if (max_iters == 0) max_iters = 1; 
+
+  for (unsigned i = 0; i < max_iters; ++i) {
+    pass2_assign_addresses(sect);
+    bool changed = pass2_validate_compressed_ranges(sect);
+    if (!changed) return true;
+  }
+  return false;
 }
 
 // Builds a 16-bit tag mask for a compressed op from its fixed metadata
@@ -327,74 +535,47 @@ static bool write_word_le(uint32_t word) {
   return write_bytes(b, 4);
 }
 
-// Looks up a symbol and computes the relocation value
-static int32_t resolve_label(const char* label, reloc_kind_t reloc, uint32_t addr, int lineno) {
-  int target = search_sym(symtab, label);
-  if (target < 0) {
-    fprintf(stderr, "Error: (line %d): Undefined label '%s'\n", lineno, label);
-    had_error = 1;
-    return 0;
-  }
-
-  int64_t t = (int64_t)(int32_t)target;
-  int64_t pc = (int64_t)addr;
-  int64_t pc_offset = t - pc;
-
-  switch (reloc) {
-    case RELOC_HI20: {
-      int64_t hi = (pc_offset + 0x800) >> 12;
-      return (int32_t)(hi << 12);
-    }
-    case RELOC_LO12: {
-      int64_t hi = (pc_offset + 0x800) >> 12;
-      int64_t lo = pc_offset - (hi << 12);
-      return (int32_t)lo;
-    }
-    case RELOC_BOFF:
-    case RELOC_JTGT:
-      return pc_offset;
-    default:
-      return (int32_t)t;
-  }
-}
-
 // Pack a CR-type instruction into a 16 bit halfword
 static bool encode_crtype(opcode_t op, int rd, int rs1, int rs2, int lineno, uint16_t* out) {
   if (!require_c_for_op(op, lineno)) { had_error = 1; return false; }
 
-  if (op == OP_C_MV && (rd == 0 || rs2 == 0 || rs1  != 0)) {
-    fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n", 
+  if (op == OP_C_MV && (rd == 0 || rs2 == 0 || rs1 != 0)) {
+    fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n",
             lineno, rd, rs1, rs2);
-    had_error = 1;
-    return false;
-  } 
-  else if (op == OP_C_ADD && (rd == 0 || rs2 == 0 || rs1  != rd)) {
-    fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n", 
-            lineno, rd, rs1, rs2);
-    had_error = 1;
-    return false;
+    had_error = 1; return false;
   }
-  else if ((op == OP_C_JR || op == OP_C_JALR) && (rs1 == 0 || rd != 0 || rs2 != 0)) {
-    fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n", 
+  else if (op == OP_C_ADD && (rd == 0 || rs2 == 0 || rs1 != rd)) {
+    fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n",
             lineno, rd, rs1, rs2);
-    had_error = 1;
-    return false;
+    had_error = 1; return false;
   }
-  else if (op == OP_C_EBREAK && (rd != 0 || rs2 != 0 || rs1 != 0)) {
-    fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n", 
+  else if (op == OP_C_JR) {
+    if (rs1 == 0 || rd != 0 || rs2 != 0) {
+      fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n",
+              lineno, rd, rs1, rs2);
+      had_error = 1; return false;
+    }
+  }
+  else if (op == OP_C_JALR) {
+    if (rs1 == 0 || rd != 1 || rs2 != 0) {
+      fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n",
+              lineno, rd, rs1, rs2);
+      had_error = 1; return false;
+    }
+  }
+  else if (op == OP_C_EBREAK && (rd != 0 || rs1 != 0 || rs2 != 0)) {
+    fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n",
             lineno, rd, rs1, rs2);
-    had_error = 1;
-    return false;
+    had_error = 1; return false;
   }
 
   if (op == OP_C_JR || op == OP_C_JALR) rd = rs1;
 
   const c_encoding_info_t* info = &c_encoding_table[op];
-
   *out = ((uint16_t)(info->funct3 & 0x7) << 13) |
-         ((uint16_t)(info->op12 & 0x1) << 12) |
-         ((uint16_t)(rd & 0x1F) << 7) |
-         ((uint16_t)(rs2 & 0x1F) << 2) |
+         ((uint16_t)(info->op12 & 0x1)  << 12) |
+         ((uint16_t)(rd & 0x1F)         << 7)  |
+         ((uint16_t)(rs2 & 0x1F)        << 2)  |
          ((uint16_t)(info->quadrant & 0x3));
   return true;
 }
@@ -1020,6 +1201,40 @@ static bool encode_instruction(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int r
   }
 }
 
+// Build the opcode/operands to emit, preferring the compressed choice when present
+static bool c_materialize(const ir_entry_t* e, opcode_t* op, ir_fmt_t* fmt, int* rd,
+                          int* rs1, int* rs2, int64_t* imm, const char** label, reloc_kind_t* reloc) {
+  if (!e || !op || !fmt || !rd || !rs1 || !rs2 || !imm || !label || !reloc) return false;
+
+  if (e->has_c_choice) {
+    const struct c_choice* ch = &e->choice;
+    *op = ch->op;
+    *fmt = ch->fmt;
+    *rd = ch->rd;
+    *rs1 = ch->rs1;
+    *rs2 = ch->rs2;
+    *imm = ch->imm;
+    *label = ch->label;
+    *reloc = ch->reloc;
+
+    if (ch->op == OP_C_BEQZ || ch->op == OP_C_BNEZ || ch->op == OP_C_J || ch->op == OP_C_JAL) {
+      *label = NULL;
+      *reloc = RELOC_NONE;
+    }
+    return true;
+  }
+
+  *op = e->op;
+  *fmt = e->fmt;
+  *rd = e->rd;
+  *rs1 = e->rs1;
+  *rs2 = e->rs2;
+  *imm = e->imm;
+  *label = e->label;
+  *reloc = e->reloc;
+  return true;
+}
+
 // Resolves any symbolic relocation, encodes the instruction, and writes the resulting 32-bit word to the output stream
 bool pass2_emit_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2,
                       int64_t imm, const char* label, reloc_kind_t reloc,
@@ -1079,6 +1294,21 @@ bool pass2_emit_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2,
     return false;
   }
   return true;
+}
+
+// Emit one IR node, honoring explicit C or an auto compressed form
+bool pass2_emit_node(const ir_entry_t* e) {
+  if (!e) { return false; }
+
+  opcode_t op; ir_fmt_t fmt;
+  int rd, rs1, rs2;
+  int64_t imm; const char* label;
+  reloc_kind_t reloc;
+
+  if (!c_materialize(e, &op, &fmt, &rd, &rs1, &rs2, &imm, &label, &reloc)) return false;
+
+  int64_t use_imm = label ? 0 : imm;
+  return pass2_emit_instr(op, fmt, rd, rs1, rs2, use_imm, label, reloc, e->addr, e->line);
 }
 
 // Switches to the requested output section while preventing returns to .data after .text
@@ -1147,6 +1377,21 @@ bool pass2_run(void) {
     return false;
   }
 
+  pass2_assign_addresses(SEC_DATA);
+
+  if (pass_has_C() && pass_has_auto_compress()) {
+    (void)pass2_plan_choices(ir_get(0), ir_count());
+    (void)pass2_relayout_and_validate(SEC_TEXT, 8);
+  }
+  else {
+    pass2_assign_addresses(SEC_TEXT);
+  }
+
+  if (ir_count() > 0) {
+    const ir_entry_t* first = ir_get(0);
+    if (!pass2_emit_section(first->sect)) return false;
+  }
+
   size_t n = ir_count();
   for (size_t i = 0; i < n; i++) {
     const ir_entry_t* e = ir_get(i);
@@ -1170,8 +1415,7 @@ bool pass2_run(void) {
         ok = pass2_emit_data(e->imm, e->size);
         break;
       case IR_INSTR:
-        ok = pass2_emit_instr(e->op, e->fmt, e->rd, e->rs1, e->rs2, e->label ? 0 : e->imm,
-                              e->label, e->reloc, e->addr, e->line);
+        ok = pass2_emit_node(e);
         break;
       default:
         fprintf(stderr, "Error: unknown IR kind at index %zu (line %d)\n", i, e->line);

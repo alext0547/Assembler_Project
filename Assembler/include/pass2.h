@@ -42,5 +42,7 @@ bool pass2_emit_data(int64_t value, uint32_t size);
 bool pass2_emit_align(uint32_t pad_bytes);
 bool pass2_run(void);
 void pass2_report_error(void);
+bool pass2_relayout_and_validate(section_t sect, unsigned max_iters);
+bool pass2_emit_node(const ir_entry_t* e);
 
 #endif

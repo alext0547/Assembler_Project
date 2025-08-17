@@ -25,9 +25,10 @@ static bool c_map_addi_self(const ir_entry_t* n, struct c_choice* out) {
 // addi rd, x0, imm -> c.li rd, imm (via c.addi)
 static bool c_map_li_via_addi(const ir_entry_t* n, struct c_choice* out) {
   if (!n || !out) return false;
-  if (n->rs1 != 0 || n->rd == 0) return false;
-  if (n->imm < -32 || n->imm > 31) return false;
   if (n->op != OP_ADDI) return false;
+  if (n->rs1 != 0 || n->rd == 0) return false;
+  if (n->imm == 0) return false;
+  if (n->imm < -32 || n->imm > 31) return false;
 
   out->fmt = IF_CI;
   out->rd = n->rd;

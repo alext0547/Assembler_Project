@@ -98,6 +98,20 @@ void ir_append_instr(opcode_t op, ir_fmt_t fmt, int rd, int rs1, int rs2, int64_
             e.reloc = RELOC_NONE;
           }
 
+          const bool is_c = (fmt == IF_CR || fmt == IF_CA || fmt == IF_CI || fmt == IF_CL ||
+                             fmt == IF_CS || fmt == IF_CSS || fmt == IF_CB || fmt == IF_CJ);
+          if (is_c) {
+            e.forced_size = IR_SIZE_2;
+            e.can_compress = false;
+            e.has_c_choice = false;
+          }
+          else {
+            e.forced_size = IR_SIZE_AUTO;
+            e.can_compress = true;
+            e.has_c_choice = false;
+          }
+          e.choice = (struct c_choice){0};
+
           buf[len++] = e;
 }
 
@@ -151,7 +165,7 @@ size_t ir_count(void) {
 
 // Gets a pointer to IR entry i or NULL if out of range
 // Returns pointer to IR entry or NULL
-const ir_entry_t* ir_get(size_t i) {
+ir_entry_t* ir_get(size_t i) {
   if (i >= len) {
     return NULL;
   }
@@ -237,4 +251,10 @@ uint8_t ir_get_forced_size(const ir_entry_t* instr) {
 bool ir_is_explicit_c(const ir_entry_t* instr) {
   if (!instr) return false;
   return (instr->forced_size == IR_SIZE_2) && !instr->can_compress && !instr->has_c_choice;
+}
+
+// Clear any previously selected compressed replacement choice
+void ir_clear_c_choice(ir_entry_t* instr) {
+  if (!instr) return;
+  instr->has_c_choice = false;
 }
