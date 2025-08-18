@@ -1,4 +1,4 @@
-# Test10: All C extended instructions
+# Test 10: All C extended instructions
     .text
 _start:
     # --- CI (incl. c.nop) ---

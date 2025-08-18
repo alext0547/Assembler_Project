@@ -1,4 +1,4 @@
-# Test9: RV64 with M-extension (includes standard M ops + W variants)
+# Test 09: RV64 with M-extension (includes standard M ops + W variants)
 .text
   # RV64-only W variants
   mulw   x5,  x6,  x7

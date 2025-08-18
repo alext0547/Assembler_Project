@@ -1,4 +1,4 @@
-# Test8: RV32 with M-extension
+# Test 08: RV32 with M-extension
 .text
   mul    x5,  x6,  x7
   mulh   x8,  x9,  x10

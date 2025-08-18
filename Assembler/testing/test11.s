@@ -1,4 +1,4 @@
-# Test11: Auto-compress edge cases (RV32): CI/CR/CB/CJ, CL/CS/CSS/CI(sp)
+# Test 11: Auto-compress edge cases (RV32): CI/CR/CB/CJ, CL/CS/CSS/CI(sp)
     .text
 _start:
     # --- CI: addi self (imm in [-32..31]) ---

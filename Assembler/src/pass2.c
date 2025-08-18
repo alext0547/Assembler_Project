@@ -550,18 +550,20 @@ static bool encode_crtype(opcode_t op, int rd, int rs1, int rs2, int lineno, uin
     had_error = 1; return false;
   }
   else if (op == OP_C_JR) {
-    if (rs1 == 0 || rd != 0 || rs2 != 0) {
+    if (rs1 == 0 || rs2 != 0) {
       fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n",
               lineno, rd, rs1, rs2);
       had_error = 1; return false;
     }
+    rd = rs1;
   }
   else if (op == OP_C_JALR) {
-    if (rs1 == 0 || rd != 1 || rs2 != 0) {
+    if (rs1 == 0 || rs2 != 0) {
       fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n",
               lineno, rd, rs1, rs2);
       had_error = 1; return false;
     }
+    rd = rs1;
   }
   else if (op == OP_C_EBREAK && (rd != 0 || rs1 != 0 || rs2 != 0)) {
     fprintf(stderr, "Error: (line %d): Invalid register value(s) for rd (x%d), rs1 (x%d), rs2 (x%d)\n",
