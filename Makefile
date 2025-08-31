@@ -11,7 +11,7 @@ INCDIR = Assembler/include
 
 # Flags
 CPPFLAGS = -I$(INCDIR)
-CFLAGS = -std=c11 -O2 -Wall -Wextra -g -MMD -MP -D_POSIX_C_SOURCE=200809L
+CFLAGS = -std=c11 -O2 -Wall -Wextra -g -MMD -MP -D_POSIX_C_SOURCE=200809L -D_FILE_OFFSET_BITS=64
 LDLIBS = -lm -lfl
 
 # Source files
@@ -57,7 +57,7 @@ $(LEXER_C): $(SRCDIR)/assembler.l $(PARSER_H)
 
 # Link
 $(EXEC): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 # Run the assembler
 RUN_ARGS ?=
