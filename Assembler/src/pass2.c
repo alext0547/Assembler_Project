@@ -419,29 +419,6 @@ static bool require_c_for_op(opcode_t op, int lineno) {
   return true;
 }
 
-// Write exactly n bytes to outfile
-static bool write_bytes(const void *buf, size_t n) {
-  if (had_error) return false;
-  if (!outfile) {
-    fprintf(stderr, "Error: no output file set\n");
-    had_error = 1;
-    return false;
-  }
-
-  const unsigned char *p = (const unsigned char *)buf;
-  while (n > 0) {
-    size_t wrote = fwrite(p, 1, n, outfile);
-    if (wrote == 0) {
-      perror("fwrite");
-      had_error = 1;
-      return false;
-    }
-    p += wrote;
-    n -= wrote;
-  }
-  return true;
-}
-
 // Ensures the incorrect xlen isn't being used
 static bool require_xlen(int need, int lineno) {
   if (pass_get_xlen() != need) {
