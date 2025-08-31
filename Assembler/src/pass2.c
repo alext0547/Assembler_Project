@@ -11,6 +11,7 @@
 #include "symtab.h"
 #include "pass2.h"
 #include "c_rules.h"
+#include "out.h"
 
 static const encoding_info_t encoding_table[] = {
   [OP_ADD] = { 0x33, 0, 0 },
@@ -490,49 +491,6 @@ static bool require_for_op(opcode_t op, int lineno) {
     default:
       return true;
   }
-}
-
-// Emit n zero bytes efficiently for .space and alignment
-static bool write_zeros(size_t n) {
-  static const unsigned char Z[4096] = {0};
-  while (n > 0) {
-    size_t chunk = n > sizeof(Z) ? sizeof(Z) : n;
-    if (!write_bytes(Z, chunk)) return false;
-    n -= chunk;
-  }
-  return true;
-}
-
-// Emit a signed value as size bytes in little endian
-static bool write_value_le(int64_t value, uint32_t size) {
-  if (size != 1 && size != 2 && size != 4 && size != 8) {
-    fprintf(stderr, "Error: Invalid size passed to write_value_le (%u)\n", size);
-    had_error = 1;
-    return false;
-  }
-  unsigned char b[8];
-  for (uint32_t i = 0; i < size; i++) {
-    b[i] = (unsigned char)((uint64_t)value >> (8*i));
-  }
-  return write_bytes(b, size);
-}
-
-// Encode a 16-bit half word in little endian and write it
-static bool write_half_le(uint16_t h) {
-  unsigned char b[2];
-  b[0] = (unsigned char)(h & 0xFF);
-  b[1] = (unsigned char)((h >> 8) & 0xFF);
-  return write_bytes(b, 2);
-}
-
-// Encode a 32-bit word in little endian and write it
-static bool write_word_le(uint32_t word) {
-  unsigned char b[4];
-  b[0] = (unsigned char)(word & 0xFF);
-  b[1] = (unsigned char)((word >> 8) & 0xFF);
-  b[2] = (unsigned char)((word >> 16) & 0xFF);
-  b[3] = (unsigned char)((word >> 24) & 0xFF);
-  return write_bytes(b, 4);
 }
 
 // Pack a CR-type instruction into a 16 bit halfword
@@ -1321,15 +1279,7 @@ bool pass2_emit_section(section_t sect) {
     return false;
   }
 
-  if (seen_text && sect == SEC_DATA) {
-    fprintf(stderr, "Error: cannot return to .data section after entering .text section\n");
-    had_error = 1;
-    return false;
-  }
-
-  if (sect == SEC_TEXT) seen_text = true;
-
-  out_section = sect;
+  out_begin_section(sect);
   return true;
 }
 

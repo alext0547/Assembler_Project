@@ -32,6 +32,7 @@ $(SRCDIR)/pass2.c \
 $(SRCDIR)/ir.c \
 $(SRCDIR)/symtab.c \
 $(SRCDIR)/c_rules.c \
+$(SRCDIR)/out.c \
 $(PARSER_C) \
 $(LEXER_C)
 
