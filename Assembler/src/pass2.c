@@ -1256,6 +1256,15 @@ bool pass2_emit_section(section_t sect) {
     return false;
   }
 
+  if (seen_text && sect == SEC_DATA) {
+    fprintf(stderr, "Error: cannot return to .data section after entering .text section\n");
+    had_error = 1;
+    return false;
+  }
+
+  if (sect == SEC_TEXT) seen_text = true;
+
+  out_section = sect;
   out_begin_section(sect);
   return true;
 }

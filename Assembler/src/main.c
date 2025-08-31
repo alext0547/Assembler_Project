@@ -161,12 +161,6 @@ int main(int argc, char** argv) {
   bool final_ok = pass2_finalize();
 
   uint64_t entry = 0;
-  if (parse_out_fmt == OUT_ELF) {
-    int start_off = search_sym(symtab, "_start");
-    if (start_off >= 0) {
-      entry = out_text_base() + (uint32_t)start_off;
-    }
-  }
   bool ofinish_ok = out_finish(entry);
 
   bool closed_ok = (fclose(out) == 0);
