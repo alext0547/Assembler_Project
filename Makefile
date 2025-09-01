@@ -20,8 +20,11 @@ BISON_SRC = $(SRCDIR)/assembler.y
 FLEX_SRC = $(SRCDIR)/assembler.l
 
 # Generated files
+PARSER_SRC := Assembler/src/assembler.y
 PARSER_C = $(SRCDIR)/assembler.tab.c
 PARSER_H = $(SRCDIR)/assembler.tab.h
+
+LEXER_SRC := Assembler/src/assembler.l
 LEXER_C = $(SRCDIR)/lex.yy.c
 
 # Project sources
@@ -45,12 +48,14 @@ EXEC = assembler
 all: $(EXEC)
 
 # Bison: parser
-$(PARSER_C) $(PARSER_H): $(SRCDIR)/assembler.y
-	$(BISON) -Wall -d -o $(PARSER_C) $<
+$(PARSER_C) $(PARSER_H): $(PARSER_SRC)
+	@echo "bison $<"
+		$(BISON) -Wall -d -o $(PARSER_C) $<
 
 # Flex: lexer
-$(LEXER_C): $(SRCDIR)/assembler.l $(PARSER_H)
-	$(FLEX) -o $(LEXER_C) $<
+$(LEXER_C): $(LEXER_SRC) $(PARSER_H)
+	@echo "flex $<"
+		$(FLEX) -o $(LEXER_C) $(LEXER_SRC)
 
 # Compile .c -> .o
 %.o: %.c
@@ -75,6 +80,7 @@ clean:
 
 .PHONY: test
 test: $(EXEC)
+	@chmod +x run_all_tests.sh
 	@./run_all_tests.sh $(TEST_DIR)
 
 .PHONY: test-valgrind
