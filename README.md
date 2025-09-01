@@ -68,7 +68,7 @@ assembler [-o output.bin] [-m32|-m64] [-m|-mno-m] [-mc|-mno-c] \
 
 ### Examples
 
-**ELF, RV32I**
+### ELF, RV32I
 
 ```bash
 ./assembler -m32 -felf -o test1.elf Assembler/testing/test1.s
@@ -76,7 +76,7 @@ readelf -hSWl test1.elf
 riscv64-linux-gnu-objdump -d test1.elf | less
 ```
 
-**ELF, RV64IMC with auto‑compression**
+### ELF, RV64IMC with auto‑compression
 
 ```bash
 ./assembler -m64 -m -mc -mcompress -felf -o test13.elf Assembler/testing/test13.s
@@ -84,7 +84,7 @@ readelf -hSWl test13.elf
 readelf -x .text -x .data test13.elf
 ```
 
-**RAW binary (default)**
+### RAW binary (default)
 
 ```bash
 ./assembler Assembler/testing/test1.s        # emits test1.bin
@@ -95,8 +95,7 @@ xxd test1.bin | head
 
 ## Project layout
 
-```
-Assembler/
+```Assembler/
   include/
     pass.h pass1.h pass2.h ir.h out.h ...
   src/
@@ -119,21 +118,21 @@ Makefile
 
 ## ELF output details
 
-**Virtual addresses**
+### Virtual addresses
 
 - `.text` base: `0x0010_0000`
 - `.data` base: `0x0020_0000`
 
-**Program headers**
+### Program headers
 
 - `PT_LOAD` for `.text` (`R|X`, aligned `0x1000`)
 - `PT_LOAD` for `.data` (`R|W`, aligned `0x1000`)
 
-**Sections**
+### Sections
 
 - `.text`, `.data`, `.shstrtab` only (no symbol/reloc tables)
 
-**Entry**
+### Entry
 
 - `_start` symbol if present; otherwise `.text` base
 
