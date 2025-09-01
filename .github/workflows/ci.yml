@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:  # manual run button
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & fast tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential flex bison binutils
+
+      - name: Build
+        run: make -j
+
+      - name: Fast test suite
+        run: make test
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fast-test-logs
+          path: out/
+
+  valgrind:
+    name: Valgrind tests
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build deps + Valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential flex bison binutils valgrind
+
+      - name: Build
+        run: make -j
+
+      - name: Run under Valgrind
+        # Your Makefile already wires VALGRIND=1 into the script
+        run: VALGRIND=1 make test-valgrind
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: valgrind-logs
+          path: out/
