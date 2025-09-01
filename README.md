@@ -68,20 +68,13 @@ assembler [-o output.bin] [-m32|-m64] [-m|-mno-m] [-mc|-mno-c] \
 
 ### Examples
 
-### ELF, RV32I
+### Tests
+
+Run all 15 tests:
 
 ```bash
-./assembler -m32 -felf -o test1.elf Assembler/testing/test1.s
-readelf -hSWl test1.elf
-riscv64-linux-gnu-objdump -d test1.elf | less
-```
-
-### ELF, RV64IMC with auto‑compression
-
-```bash
-./assembler -m64 -m -mc -mcompress -felf -o test13.elf Assembler/testing/test13.s
-readelf -hSWl test13.elf
-readelf -x .text -x .data test13.elf
+make test
+make test-valgrind                          # or: VALGRIND=1 make test
 ```
 
 ### RAW binary (default)
@@ -110,7 +103,7 @@ xxd test1.bin | head
     assembler.l     # Flex lexer
     assembler.y     # Bison grammar
   testing/
-    test1.s test13.s ...
+    test1.s ...
 Makefile
 ```
 

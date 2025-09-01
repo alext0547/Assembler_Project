@@ -8,6 +8,7 @@ FLEX = flex
 # Dirs
 SRCDIR = Assembler/src
 INCDIR = Assembler/include
+TEST_DIR := Assembler/testing
 
 # Flags
 CPPFLAGS = -I$(INCDIR)
@@ -71,3 +72,13 @@ clean:
 
 .PHONY: all clean
 -include $(DEPS)
+
+.PHONY: test
+test: $(EXEC)
+	@./run_all_tests.sh $(TEST_DIR)
+
+.PHONY: test-valgrind
+test-valgrind:
+	@echo "Running tests under Valgrind (this may take longer)..."
+	@chmod +x run_all_tests.sh
+	VALGRIND=1 ./run_all_tests.sh

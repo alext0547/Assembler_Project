@@ -50,3 +50,46 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# --- Project-specific (RISC-V assembler) ---
+
+# Built binary + test artifacts
+/assembler
+/out/
+/build/
+/dist/
+*.bin
+*.log
+
+# Flex/Bison generated sources (keep .l/.y tracked, ignore outputs)
+lex.yy.c
+*.tab.c
+*.tab.h
+y.tab.c
+y.tab.h
+*.output
+
+# Debugger / sanitizer / coverage
+vgcore.*          # valgrind core dumps
+core
+core.*
+*.gcno
+*.gcda
+*.gcov
+coverage/
+
+# Editors/OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+tags
+cscope.*
+compile_commands.json
+
+# Valgrind
+/out/
+*.valgrind.log
+*.readelf.*.txt
