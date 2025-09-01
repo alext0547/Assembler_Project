@@ -115,10 +115,16 @@ for t in "$TEST_DIR"/test*.s; do
   flags="$DEFAULT_FLAGS"
 
   if grep -m1 -E '^# *FLAGS:' "$t" >/dev/null 2>&1; then
-    flags=$(grep -m1 -E '^# *FLAGS:' "$t" | sed -E 's/^# *FLAGS:\s*//')
-  elif [[ -f "$MANIFEST" ]] && grep -E "^$base\s*:" "$MANIFEST" >/dev/null; then
-    flags=$(grep -E "^$base\s*:" "$MANIFEST" | sed -E "s/^$base\s*:\s*//")
+  # Use [[:space:]] (POSIX) and strip any trailing CR in case of CRLF
+    flags=$(grep -m1 -E '^# *FLAGS:' "$t" \
+            | sed -E 's/^# *FLAGS:[[:space:]]*//' \
+            | tr -d '\r')
+  elif [[ -f "$MANIFEST" ]] && grep -E "^$base[[:space:]]*:" "$MANIFEST" >/dev/null; then
+    flags=$(grep -E "^$base[[:space:]]*:" "$MANIFEST" \
+            | sed -E "s/^$base[[:space:]]*:[[:space:]]*//" \
+            | tr -d '\r')
   fi
+
 
   ext=bin; [[ "$flags" =~ -felf ]] && ext=elf
   out="$OUT_DIR/$base.$ext"
