@@ -1,0 +1,19 @@
+# Assembler/testing/flags.lst
+# Format: testNameWithoutExt: <flags>
+# Default if not specified anywhere: -m32 -felf
+
+test1:  -m32 -felf
+test2:  -m32 -felf
+test3:  -m32 -felf
+test4:  -m32 -felf
+test5:  -m32 -felf
+test6:  -m32 -felf
+test7:  -m64 -felf
+test8:  -m32 -m -felf
+test9:  -m64 -m -felf
+test10: -m64 -mc -felf
+test11: -mc -mcompress -felf
+test12: -m64 -mc -mcompress -felf
+test13: -m64 -m -mc -mcompress -felf
+test14: -m32 -felf
+test15: -m32 -mc -mcompress -felf
