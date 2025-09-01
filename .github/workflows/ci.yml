@@ -29,6 +29,9 @@ jobs:
 
       - name: Build
         run: make -j
+      
+      - name: Make scripts executable
+        run: chmod +x run_all_tests.sh
 
       - name: Fast test suite
         run: make test
@@ -56,6 +59,9 @@ jobs:
 
       - name: Build
         run: make -j
+      
+      - name: Make scripts executable
+        run: chmod +x run_all_tests.sh
 
       - name: Run under Valgrind
         # Your Makefile already wires VALGRIND=1 into the script
