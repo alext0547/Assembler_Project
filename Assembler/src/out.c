@@ -536,3 +536,11 @@ bool out_finish(uint64_t entry_addr) {
   free(shstr.data);
   return true;
 }
+
+// Frees all allocated memory and resets the global state structure
+void out_dispose(void) {
+  free(G.text.data);
+  free(G.data.data);
+  free(G.shstr.data);
+  memset(&G, 0, sizeof(G));
+}

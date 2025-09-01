@@ -23,6 +23,7 @@ bool write_half_le(uint16_t half);
 bool write_value_le(int64_t value, uint32_t size);
 bool write_zeros(uint32_t n);
 uint64_t out_text_base(void);
+void out_dispose(void);
 
 #ifdef __cplusplus
 }

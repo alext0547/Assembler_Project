@@ -12,6 +12,7 @@
 
 extern int yyparse(void);
 extern FILE* yyin;
+extern int yylex_destroy(void);
 
 // Print brief CLI usage message to stderr
 static void usage(const char* prog) {
@@ -118,6 +119,7 @@ int main(int argc, char** argv) {
     if (!auto_out) {
       fprintf(stderr, "Error: failed to allocate output filename\n");
       fclose(in);
+      yylex_destroy();
       return 1;
     }
     out_path = auto_out;
@@ -135,6 +137,7 @@ int main(int argc, char** argv) {
   yyin = in;
   int parse_rc = yyparse();
   fclose(in);
+  yylex_destroy();
 
   pass1_finalize();
   if (parse_rc != 0) {
@@ -169,6 +172,7 @@ int main(int argc, char** argv) {
     ok = false;
   }
 
+  out_dispose();
   free(auto_out);
   return (ok && final_ok && ofinish_ok && closed_ok) ? 0 : 1;
 }
